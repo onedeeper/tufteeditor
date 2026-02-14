@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tufte Editor</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tufte-css/1.8.0/tufte.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button id="sidebar-toggle" class="sidebar-toggle-btn" title="Toggle sidebar">&#9776;</button>
+        <span class="doc-title" contenteditable="true" spellcheck="false">Untitled Document</span>
+        <span class="word-count">0 words</span>
+      </div>
+      <div class="topbar-right">
+        <div class="view-toggles">
+          <button class="view-btn" data-view="edit" title="Editor only">Edit</button>
+          <button class="view-btn active" data-view="split" title="Split view">Split</button>
+          <button class="view-btn" data-view="preview" title="Preview only">Preview</button>
+        </div>
+        <div class="cite-style-toggle">
+          <button class="cite-style-btn active" data-cite-style="numbered" title="Numbered citations">[1]</button>
+          <button class="cite-style-btn" data-cite-style="apa" title="APA citations">APA</button>
+        </div>
+        <div class="export-dropdown">
+          <button class="export-btn">Export &#9662;</button>
+          <div class="export-menu">
+            <button data-export="html">Download HTML</button>
+            <button data-export="print">Print / PDF</button>
+            <button data-export="markdown">Copy Markdown</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <button id="undo-btn" title="Undo (Ctrl+Z)">Undo</button>
+      <button id="redo-btn" title="Redo (Ctrl+Shift+Z)">Redo</button>
+      <span class="toolbar-sep"></span>
+      <button data-insert="sidenote" title="Sidenote">Sidenote</button>
+      <button data-insert="marginnote" title="Margin Note">Margin Note</button>
+      <button data-insert="newthought" title="New Thought">New Thought</button>
+      <button data-insert="epigraph" title="Epigraph">Epigraph</button>
+      <button data-insert="fullwidth" title="Full-width Figure">Full-width Figure</button>
+      <button data-insert="marginfig" title="Margin Figure">Margin Fig</button>
+      <span class="toolbar-sep"></span>
+      <button data-insert="bold" title="Bold">B</button>
+      <button data-insert="italic" title="Italic">I</button>
+      <button data-insert="code" title="Inline Code">&lt;/&gt;</button>
+      <button data-insert="link" title="Link">Link</button>
+      <button data-insert="image" title="Image">Image</button>
+      <button data-insert="heading" title="Heading">H2</button>
+      <button data-insert="hr" title="Horizontal Rule">HR</button>
+      <span class="toolbar-sep"></span>
+      <button data-insert="cite" title="Citation">Cite</button>
+      <button data-insert="citeurl" title="URL Citation">Cite URL</button>
+      <button id="bib-btn" title="Manage Bibliography">Bib</button>
+      <span class="toolbar-sep"></span>
+      <button id="img-upload-btn" title="Upload Images">Upload</button>
+      <input type="file" id="img-file-input" accept="image/*" multiple style="display:none">
+    </div>
+
+    <!-- Main Area -->
+    <div class="main-area">
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-title">Documents</span>
+          <button id="new-doc-btn" class="sidebar-new-btn" title="New document">+ New</button>
+        </div>
+        <div class="sidebar-list" id="sidebar-list"></div>
+      </aside>
+      <div class="split-pane">
+        <div class="pane editor-pane">
+          <textarea id="editor" spellcheck="true" placeholder="Write your Tufte Markdown here..."></textarea>
+        </div>
+        <div class="divider" title="Drag to resize"></div>
+        <div class="pane preview-pane">
+          <div id="preview" class="preview-content">
+            <article>
+            </article>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Citation Autocomplete -->
+    <div id="autocomplete" class="autocomplete-dropdown"></div>
+
+    <!-- Bibliography Modal -->
+    <div id="bib-modal" class="modal-overlay" style="display:none;">
+      <div class="modal">
+        <h3>Load Bibliography</h3>
+        <p>Paste BibTeX entries or load a .bib file:</p>
+        <textarea id="bib-textarea" rows="10" placeholder="@article{key,&#10;  author = {Last, First},&#10;  title = {Title},&#10;  year = {2024},&#10;  journal = {Journal Name}&#10;}"></textarea>
+        <div class="modal-file-row">
+          <input type="file" id="bib-file" accept=".bib,.bibtex,.txt">
+          <span id="bib-status"></span>
+        </div>
+        <div class="modal-actions">
+          <button id="bib-cancel" class="modal-btn">Cancel</button>
+          <button id="bib-apply" class="modal-btn modal-btn-primary">Apply</button>
+          <button id="bib-clear" class="modal-btn modal-btn-danger">Clear All</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="parser.js"></script>
+  <script src="citations.js"></script>
+  <script src="images.js"></script>
+  <script src="documents.js"></script>
+  <script src="editor.js"></script>
+</body>
+</html>
