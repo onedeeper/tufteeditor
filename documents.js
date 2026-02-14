@@ -1,163 +1,136 @@
 /**
- * documents.js — Multi-document CRUD with localStorage
+ * documents.js — Multi-document CRUD via server API
  */
 
 const Documents = (function () {
-  const INDEX_KEY = 'tufte-doc-index';
   const ACTIVE_KEY = 'tufte-doc-active';
-  const CONTENT_PREFIX = 'tufte-doc-content:';
 
-  // Old single-document keys (for migration)
-  const OLD_CONTENT_KEY = 'tufte-editor-content';
-  const OLD_TITLE_KEY = 'tufte-editor-title';
+  let _docs = [];       // cached list: [{name, title, mtime}]
+  let _activeDoc = null; // filename of active doc
 
-  function generateId() {
-    return 'doc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5);
+  function sanitize(title) {
+    return title.replace(/[\/\\:*?"<>|]/g, '').trim() || 'Untitled Document';
   }
 
-  function getIndex() {
-    const raw = localStorage.getItem(INDEX_KEY);
-    return raw ? JSON.parse(raw) : null;
-  }
+  async function init() {
+    const res = await fetch('/api/docs');
+    _docs = await res.json();
 
-  function setIndex(index) {
-    localStorage.setItem(INDEX_KEY, JSON.stringify(index));
-  }
-
-  function init(starterContent) {
-    let index = getIndex();
-
-    if (!index) {
-      // Check for old single-document data to migrate
-      const oldContent = localStorage.getItem(OLD_CONTENT_KEY);
-      const oldTitle = localStorage.getItem(OLD_TITLE_KEY);
-
-      if (oldContent !== null) {
-        const id = generateId();
-        const now = Date.now();
-        const title = oldTitle || 'Untitled Document';
-        index = [{ id: id, title: title, createdAt: now, updatedAt: now }];
-        setIndex(index);
-        localStorage.setItem(CONTENT_PREFIX + id, oldContent);
-        localStorage.setItem(ACTIVE_KEY, id);
-
-        // Remove old keys
-        localStorage.removeItem(OLD_CONTENT_KEY);
-        localStorage.removeItem(OLD_TITLE_KEY);
-
-        return { id: id, title: title, content: oldContent };
-      }
-
-      // No old data — create starter document
-      var id = generateId();
-      var now = Date.now();
-      index = [{ id: id, title: 'Untitled Document', createdAt: now, updatedAt: now }];
-      setIndex(index);
-      localStorage.setItem(CONTENT_PREFIX + id, starterContent);
-      localStorage.setItem(ACTIVE_KEY, id);
-      return { id: id, title: 'Untitled Document', content: starterContent };
+    if (_docs.length === 0) {
+      return { name: null, title: 'Untitled Document', content: '' };
     }
 
-    // Index exists — load active or first document
-    var activeId = localStorage.getItem(ACTIVE_KEY);
-    var entry = index.find(function (d) { return d.id === activeId; });
-    if (!entry) {
-      entry = index[0];
-      activeId = entry.id;
-      localStorage.setItem(ACTIVE_KEY, activeId);
+    // Restore active doc from localStorage
+    const saved = localStorage.getItem(ACTIVE_KEY);
+    const entry = _docs.find(d => d.name === saved) || _docs[0];
+    _activeDoc = entry.name;
+    localStorage.setItem(ACTIVE_KEY, _activeDoc);
+
+    const content = await (await fetch('/api/docs/' + encodeURIComponent(_activeDoc))).text();
+    return { name: _activeDoc, title: entry.title, content };
+  }
+
+  async function create(title) {
+    const docTitle = sanitize(title || 'Untitled Document');
+    let name = docTitle + '.md';
+
+    // Avoid collisions
+    let i = 2;
+    while (_docs.some(d => d.name === name)) {
+      name = docTitle + ' ' + i + '.md';
+      i++;
     }
-    var content = localStorage.getItem(CONTENT_PREFIX + activeId) || '';
-    return { id: activeId, title: entry.title, content: content };
+
+    await fetch('/api/docs/' + encodeURIComponent(name), {
+      method: 'PUT',
+      body: ''
+    });
+
+    const entry = { name, title: name.replace(/\.md$/, ''), mtime: Date.now() };
+    _docs.unshift(entry);
+    _activeDoc = name;
+    localStorage.setItem(ACTIVE_KEY, _activeDoc);
+    return { name, title: entry.title, content: '' };
   }
 
-  function create(title, content) {
-    var id = generateId();
-    var now = Date.now();
-    var docTitle = title || 'Untitled Document';
-    var docContent = content || '';
-    var index = getIndex() || [];
-    index.unshift({ id: id, title: docTitle, createdAt: now, updatedAt: now });
-    setIndex(index);
-    localStorage.setItem(CONTENT_PREFIX + id, docContent);
-    localStorage.setItem(ACTIVE_KEY, id);
-    return { id: id, title: docTitle, content: docContent };
-  }
-
-  function load(id) {
-    var index = getIndex() || [];
-    var entry = index.find(function (d) { return d.id === id; });
+  async function load(name) {
+    const entry = _docs.find(d => d.name === name);
     if (!entry) return null;
-    localStorage.setItem(ACTIVE_KEY, id);
-    var content = localStorage.getItem(CONTENT_PREFIX + id) || '';
-    return { id: id, title: entry.title, content: content };
+    _activeDoc = name;
+    localStorage.setItem(ACTIVE_KEY, _activeDoc);
+    const content = await (await fetch('/api/docs/' + encodeURIComponent(name))).text();
+    return { name, title: entry.title, content };
   }
 
-  function save(content) {
-    var activeId = localStorage.getItem(ACTIVE_KEY);
-    if (!activeId) return;
-    localStorage.setItem(CONTENT_PREFIX + activeId, content);
-    var index = getIndex() || [];
-    var entry = index.find(function (d) { return d.id === activeId; });
+  async function save(content) {
+    if (!_activeDoc) return;
+    await fetch('/api/docs/' + encodeURIComponent(_activeDoc), {
+      method: 'PUT',
+      body: content
+    });
+    const entry = _docs.find(d => d.name === _activeDoc);
+    if (entry) entry.mtime = Date.now();
+  }
+
+  async function rename(newTitle) {
+    if (!_activeDoc) return;
+    const safeName = sanitize(newTitle) + '.md';
+    if (safeName === _activeDoc) return;
+
+    const res = await fetch('/api/docs/' + encodeURIComponent(_activeDoc), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newName: safeName })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Rename failed');
+    }
+
+    const entry = _docs.find(d => d.name === _activeDoc);
     if (entry) {
-      entry.updatedAt = Date.now();
-      setIndex(index);
+      entry.name = safeName;
+      entry.title = safeName.replace(/\.md$/, '');
+      entry.mtime = Date.now();
     }
+    _activeDoc = safeName;
+    localStorage.setItem(ACTIVE_KEY, _activeDoc);
   }
 
-  function saveTitle(title) {
-    var activeId = localStorage.getItem(ACTIVE_KEY);
-    if (!activeId) return;
-    var index = getIndex() || [];
-    var entry = index.find(function (d) { return d.id === activeId; });
-    if (entry) {
-      entry.title = title;
-      entry.updatedAt = Date.now();
-      setIndex(index);
-    }
-  }
+  async function deleteDoc(name) {
+    await fetch('/api/docs/' + encodeURIComponent(name), { method: 'DELETE' });
+    _docs = _docs.filter(d => d.name !== name);
 
-  function deleteDoc(id) {
-    var index = getIndex() || [];
-    index = index.filter(function (d) { return d.id !== id; });
-    localStorage.removeItem(CONTENT_PREFIX + id);
-
-    if (index.length === 0) {
-      // Deleted last document — clear everything
-      localStorage.removeItem(INDEX_KEY);
-      localStorage.removeItem(ACTIVE_KEY);
-      return null;
+    if (_docs.length === 0) {
+      // Create a fresh doc
+      const fresh = await create();
+      const content = await (await fetch('/api/docs/' + encodeURIComponent(fresh.name))).text();
+      return { name: fresh.name, title: fresh.title, content };
     }
 
-    setIndex(index);
-
-    var activeId = localStorage.getItem(ACTIVE_KEY);
-    if (activeId === id) {
-      // Switch to first remaining document
-      var next = index[0];
-      localStorage.setItem(ACTIVE_KEY, next.id);
-      var content = localStorage.getItem(CONTENT_PREFIX + next.id) || '';
-      return { id: next.id, title: next.title, content: content };
+    if (_activeDoc === name) {
+      _activeDoc = _docs[0].name;
+      localStorage.setItem(ACTIVE_KEY, _activeDoc);
     }
 
-    return { id: activeId, title: '', content: '' };
+    const content = await (await fetch('/api/docs/' + encodeURIComponent(_activeDoc))).text();
+    const entry = _docs.find(d => d.name === _activeDoc);
+    return { name: _activeDoc, title: entry.title, content };
   }
 
   function list() {
-    return getIndex() || [];
+    return _docs;
   }
 
   function getActiveId() {
-    return localStorage.getItem(ACTIVE_KEY);
+    return _activeDoc;
   }
 
-  return {
-    init: init,
-    create: create,
-    load: load,
-    save: save,
-    saveTitle: saveTitle,
-    deleteDoc: deleteDoc,
-    list: list,
-    getActiveId: getActiveId
-  };
+  function getActiveTitle() {
+    const entry = _docs.find(d => d.name === _activeDoc);
+    return entry ? entry.title : '';
+  }
+
+  return { init, create, load, save, rename, deleteDoc, list, getActiveId, getActiveTitle };
 })();

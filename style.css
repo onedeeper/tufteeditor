@@ -661,6 +661,70 @@ body {
   background: #fff0f0;
 }
 
+/* ── Image Modal ── */
+.img-list {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+}
+
+.img-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--bg-dark);
+}
+
+.img-item:last-child {
+  border-bottom: none;
+}
+
+.img-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  flex-shrink: 0;
+  background: var(--bg-dark);
+}
+
+.img-name {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.img-delete-btn {
+  border: 1px solid #c00;
+  background: #fff;
+  color: #c00;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: var(--font);
+}
+
+.img-delete-btn:hover {
+  background: #fff0f0;
+}
+
+.img-empty {
+  text-align: center;
+  padding: 24px 12px;
+  color: #888;
+  font-size: 13px;
+}
+
 /* ── Citations in Preview ── */
 .citation {
   text-decoration: none;

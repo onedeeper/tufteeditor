@@ -1,3 +1,5 @@
 *.bib
 .claude/
 .DS_Store
+uploads/*
+!uploads/.gitkeep

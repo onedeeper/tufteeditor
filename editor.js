@@ -1,6 +1,6 @@
 /**
  * editor.js — App logic
- * Live preview, toolbar, view toggle, resizer, localStorage, export
+ * Live preview, toolbar, view toggle, resizer, server-backed save, export
  */
 
 (async function () {
@@ -15,173 +15,8 @@
   const SAVE_DELAY    = 1000;
   const PREVIEW_DELAY = 150;
 
-  /* ── Starter Content ── */
-  const STARTER = `# Tufte Markdown Editor
-
-## Getting Started
-
-{newthought:Welcome to the Tufte Markdown Editor.} This split-pane editor lets you write in an extended Markdown syntax and see a live preview styled with Edward Tufte's elegant CSS.
-
-All five custom tokens are demonstrated below, along with standard Markdown formatting.
-
-## Sidenotes and Margin Notes
-
-Sidenotes are like footnotes, but better — they appear in the margin right next to the relevant text.{sn:This is a sidenote. It appears in the margin and is numbered automatically.} They keep the reader's eye on the page instead of forcing them to jump to the bottom.
-
-Margin notes are similar but unnumbered.{mn:This is a margin note. It uses the ⊕ symbol as a toggle on mobile devices.} Use them for supplementary commentary that doesn't need a numbered reference.
-
-## New Thoughts
-
-{newthought:A new thought} marks the beginning of a new section within a larger discussion. It renders the opening words in small caps, a classic Tufte convention.
-
-## Epigraphs
-
-> The purpose of computing is insight, not numbers.
-> — Richard Hamming
-
-Epigraphs set the tone for a section with a quotation and attribution.
-
-## Full-width Figures
-
-Standard images are set within the article width. Use \`![caption][size](url)\` where size is a percentage:
-
-![A standard figure caption][60](https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/300px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg)
-
-Full-width images stretch across the entire page:
-
-![A full-width figure caption][100](https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/Camille_Pissarro_-_Boulevard_Montmartre_-_Eremitage.jpg/1280px-Camille_Pissarro_-_Boulevard_Montmartre_-_Eremitage.jpg){fullwidth}
-
-## Standard Markdown
-
-You can use all the usual formatting: **bold text**, *italic text*, \`inline code\`, and [hyperlinks](https://edwardtufte.github.io/tufte-css/).
-
-### Code Blocks
-
-\`\`\`javascript
-function greet(name) {
-  return \`Hello, \${name}!\`;
-}
-\`\`\`
-
-### Lists
-
-- First item
-- Second item with **bold**
-- Third item
-
-1. Ordered first
-2. Ordered second
-3. Ordered third
-
----
-
-## Citations
-
-Load a BibTeX file using the **Bib** button in the toolbar, then cite references inline with \`@key\` syntax. For example, @tufte2001 produces a numbered citation linked to the references section.
-
-You can also cite URLs directly: @url[https://edwardtufte.github.io/tufte-css/] will create a reference entry for that URL.
-
-Unknown keys like @nonexistent will show an error indicator. Toggle between numbered [1] and APA (Author, Year) styles using the toggle in the top bar.
-
----
-
-{newthought:That covers the basics.} Try editing the text on the left and watch the preview update in real time. Use the toolbar buttons to insert any of the custom tokens.`;
-
-  /* ── How to Use Guide ── */
-  const GUIDE = `# How to Use Tufte Editor
-
-## The Interface
-
-{newthought:The editor is a split-pane layout.} The left pane is where you write in Markdown, and the right pane shows a live preview styled with Tufte CSS. Use the **Edit**, **Split**, and **Preview** buttons in the top bar to switch between views. Drag the divider to resize the panes.
-
-## Documents
-
-The sidebar on the left lists all your documents. Click **+ New** to create a new document, or click any document to switch to it. Click the title at the top to rename a document. Documents are saved automatically as you type.
-
-## Writing
-
-You can use standard Markdown: **bold**, *italic*, \`inline code\`, [links](url), headings with \`#\`, lists with \`-\` or \`1.\`, blockquotes with \`>\`, code blocks with triple backticks, and horizontal rules with \`---\`.
-
-## Tufte Tokens
-
-Beyond standard Markdown, this editor supports five tokens from Tufte's typographic style. You can type them manually or use the toolbar buttons.
-
-### Sidenotes
-
-Add numbered notes in the margin with \`{sn:Your note text}\`. Place them inline right after the word they annotate.{sn:Like this sidenote right here.}
-
-### Margin Notes
-
-Add unnumbered margin notes with \`{mn:Your note text}\`.{mn:Margin notes work just like sidenotes but without a number.} Use these for supplementary remarks that don't need a reference number.
-
-### New Thoughts
-
-Mark the start of a new train of thought with \`{newthought:Opening words}\`. {newthought:This renders} the opening words in small caps.
-
-### Epigraphs
-
-Write a blockquote with an attribution line starting with \`--\` or \`—\`:
-
-> It is not enough to do your best; you must know what to do, and then do your best.
-> — W. Edwards Deming
-
-## Images
-
-### From a URL
-
-Use the syntax \`![caption][width%](url)\`:
-
-- \`![My photo][50](https://example.com/photo.jpg)\` — 50% width
-- \`![Wide shot][100](url){fullwidth}\` — full-width figure
-- \`![Detail][100](url){margin}\` — margin figure
-
-The \`[width%]\` bracket is optional; omit it for default sizing.
-
-### Uploaded Images
-
-Click the **Upload** button in the toolbar to upload images from your computer. Uploaded images persist across sessions — you won't need to re-upload them after refreshing the page.
-
-Once uploaded, reference an image by its filename: \`![caption][50](photo.jpg)\`. As you type \`@\` in the editor, autocomplete will suggest uploaded image filenames alongside citation keys.
-
-## Citations
-
-### Loading a Bibliography
-
-Click the **Bib** button in the toolbar to open the bibliography modal. Paste BibTeX entries or load a \`.bib\` file, then click **Apply**.
-
-### Citing References
-
-Once loaded, cite a reference inline with \`@citekey\` — for example, \`@tufte2001\`. Autocomplete will suggest matching keys as you type after \`@\`.
-
-To cite a URL directly, use \`@url[https://example.com]\`. A references section is generated automatically at the bottom of the document.
-
-Toggle between **[1]** numbered and **APA** citation styles using the toggle in the top bar.
-
-## Keyboard Shortcuts
-
-- **Ctrl/Cmd + B** — Bold
-- **Ctrl/Cmd + I** — Italic
-- **Ctrl/Cmd + Z** — Undo
-- **Ctrl/Cmd + Shift + Z** — Redo
-- **Ctrl/Cmd + S** — Force save
-- **Tab** — Insert two spaces
-
-## Exporting
-
-Click **Export** in the top bar for three options:
-
-- **Download HTML** — A standalone \`.html\` file with Tufte CSS, ready to open in any browser or host anywhere. Uploaded images are inlined automatically.
-- **Print / PDF** — Opens the browser print dialog. Use "Save as PDF" for a PDF export.
-- **Copy Markdown** — Copies the raw Markdown source to your clipboard.`;
-
   /* ── Restore / Init ── */
-  const initDoc = Documents.init(STARTER);
-
-  // On first run, also create the how-to-use guide
-  if (Documents.list().length === 1) {
-    Documents.create('How to Use Tufte Editor', GUIDE);
-    Documents.load(initDoc.id);
-  }
+  const initDoc = await Documents.init();
 
   editor.value = initDoc.content;
   docTitle.textContent = initDoc.title;
@@ -281,14 +116,31 @@ Click **Export** in the top bar for three options:
   function scheduleSave() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      Documents.save(editor.value);
+      Documents.save(editor.value).catch(() => {});
       renderSidebar();
     }, SAVE_DELAY);
   }
 
-  docTitle.addEventListener('input', () => {
-    Documents.saveTitle(docTitle.textContent.trim());
-    renderSidebar();
+  /* ── Title Rename (blur-based) ── */
+  let titleBeforeEdit = '';
+
+  docTitle.addEventListener('focus', () => {
+    titleBeforeEdit = docTitle.textContent.trim();
+  });
+
+  docTitle.addEventListener('blur', async () => {
+    const newTitle = docTitle.textContent.trim();
+    if (!newTitle || newTitle === titleBeforeEdit) {
+      if (!newTitle) docTitle.textContent = titleBeforeEdit;
+      return;
+    }
+    try {
+      await Documents.rename(newTitle);
+      renderSidebar();
+    } catch (e) {
+      alert(e.message);
+      docTitle.textContent = titleBeforeEdit;
+    }
   });
 
   docTitle.addEventListener('keydown', (e) => {
@@ -337,7 +189,6 @@ Click **Export** in the top bar for three options:
     }
 
     const insertion = prefix + text + after;
-    // Use execCommand for undo support where available, fall back to direct manipulation
     editor.setRangeText(insertion, start, end, 'end');
 
     // Select the placeholder so user can type over it
@@ -414,7 +265,7 @@ Click **Export** in the top bar for three options:
     exportMenu.classList.remove('open');
   });
 
-  exportMenu.addEventListener('click', (e) => {
+  exportMenu.addEventListener('click', async (e) => {
     const btn = e.target.closest('button[data-export]');
     if (!btn) return;
     exportMenu.classList.remove('open');
@@ -423,7 +274,7 @@ Click **Export** in the top bar for three options:
     if (action === 'html') {
       const title = docTitle.textContent.trim() || 'Untitled';
       let bodyHTML = parseMarkdown(editor.value);
-      if (ImageStore.getCount() > 0) bodyHTML = ImageStore.resolveInHTML(bodyHTML);
+      if (ImageStore.getCount() > 0) bodyHTML = await ImageStore.resolveInHTML(bodyHTML);
       const fullHTML = generateFullHTML(bodyHTML, title);
       const blob = new Blob([fullHTML], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
@@ -504,7 +355,7 @@ Click **Export** in the top bar for three options:
     // Ctrl/Cmd+S → save (prevent default)
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
       e.preventDefault();
-      Documents.save(editor.value);
+      Documents.save(editor.value).catch(() => {});
     }
   });
 
@@ -551,7 +402,7 @@ Click **Export** in the top bar for three options:
   bibApply.addEventListener('click', () => {
     const text = bibText.value.trim();
     if (!text) { bibModal.style.display = 'none'; return; }
-    const count = Citations.loadBibliography(text);
+    Citations.loadBibliography(text);
     updateBibStatus();
     bibModal.style.display = 'none';
     updatePreview();
@@ -563,26 +414,79 @@ Click **Export** in the top bar for three options:
     updatePreview();
   });
 
-  /* ── Image Upload ── */
-  const imgUploadBtn = document.getElementById('img-upload-btn');
+  /* ── Image Modal ── */
+  const imgManageBtn = document.getElementById('img-manage-btn');
+  const imgModal     = document.getElementById('img-modal');
+  const imgList      = document.getElementById('img-list');
+  const imgUploadMore = document.getElementById('img-upload-more');
+  const imgClose     = document.getElementById('img-close');
   const imgFileInput = document.getElementById('img-file-input');
 
-  imgUploadBtn.addEventListener('click', () => imgFileInput.click());
+  function renderImageModal() {
+    const all = ImageStore.getAll();
+    imgList.innerHTML = '';
+    if (all.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'img-empty';
+      empty.textContent = 'No images uploaded yet.';
+      imgList.appendChild(empty);
+      return;
+    }
+    all.forEach(name => {
+      const item = document.createElement('div');
+      item.className = 'img-item';
 
-  imgFileInput.addEventListener('change', (e) => {
+      const thumb = document.createElement('img');
+      thumb.className = 'img-thumb';
+      thumb.src = '/uploads/' + encodeURIComponent(name);
+      thumb.alt = name;
+      item.appendChild(thumb);
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'img-name';
+      nameEl.textContent = name;
+      item.appendChild(nameEl);
+
+      const del = document.createElement('button');
+      del.className = 'img-delete-btn';
+      del.textContent = 'Delete';
+      del.addEventListener('click', async () => {
+        if (!confirm('Delete image "' + name + '"?')) return;
+        await ImageStore.removeImage(name);
+        renderImageModal();
+        updatePreview();
+      });
+      item.appendChild(del);
+
+      imgList.appendChild(item);
+    });
+  }
+
+  imgManageBtn.addEventListener('click', () => {
+    renderImageModal();
+    imgModal.style.display = 'flex';
+  });
+
+  imgClose.addEventListener('click', () => {
+    imgModal.style.display = 'none';
+  });
+
+  imgModal.addEventListener('click', (e) => {
+    if (e.target === imgModal) imgModal.style.display = 'none';
+  });
+
+  imgUploadMore.addEventListener('click', () => imgFileInput.click());
+
+  imgFileInput.addEventListener('change', async (e) => {
     const files = e.target.files;
     if (!files.length) return;
-    let loaded = 0;
     for (const file of files) {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        ImageStore.addImage(file.name, ev.target.result);
-        loaded++;
-        if (loaded === files.length) updatePreview();
-      };
-      reader.readAsDataURL(file);
+      await ImageStore.addImage(file);
     }
     imgFileInput.value = '';
+    updatePreview();
+    // Re-render modal if open
+    if (imgModal.style.display !== 'none') renderImageModal();
   });
 
   /* ── Autocomplete (Citations + Images) ── */
@@ -829,7 +733,7 @@ Click **Export** in the top bar for three options:
 
     docs.forEach(doc => {
       const item = document.createElement('div');
-      item.className = 'sidebar-item' + (doc.id === activeId ? ' active' : '');
+      item.className = 'sidebar-item' + (doc.name === activeId ? ' active' : '');
 
       const title = document.createElement('span');
       title.className = 'sidebar-item-title';
@@ -838,55 +742,43 @@ Click **Export** in the top bar for three options:
 
       const date = document.createElement('span');
       date.className = 'sidebar-item-date';
-      date.textContent = formatRelativeDate(doc.updatedAt);
+      date.textContent = formatRelativeDate(doc.mtime);
       item.appendChild(date);
 
       const del = document.createElement('button');
       del.className = 'sidebar-item-delete';
       del.textContent = '\u00d7';
       del.title = 'Delete document';
-      del.addEventListener('click', (e) => {
+      del.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (!confirm('Delete "' + (doc.title || 'Untitled Document') + '"?')) return;
-        const result = Documents.deleteDoc(doc.id);
-        if (result) {
-          editor.value = result.content;
-          docTitle.textContent = result.title;
-          history.states = [];
-          history.pointer = -1;
-          history.save();
-          updatePreview();
-          updateWordCount();
-        } else {
-          // Deleted last doc — reinitialize
-          const fresh = Documents.init(STARTER);
-          editor.value = fresh.content;
-          docTitle.textContent = fresh.title;
-          history.states = [];
-          history.pointer = -1;
-          history.save();
-          updatePreview();
-          updateWordCount();
-        }
+        const result = await Documents.deleteDoc(doc.name);
+        editor.value = result.content;
+        docTitle.textContent = result.title;
+        history.states = [];
+        history.pointer = -1;
+        history.save();
+        updatePreview();
+        updateWordCount();
         renderSidebar();
       });
       item.appendChild(del);
 
       item.addEventListener('click', () => {
-        if (doc.id === activeId) return;
-        switchDocument(doc.id);
+        if (doc.name === activeId) return;
+        switchDocument(doc.name);
       });
 
       sidebarList.appendChild(item);
     });
   }
 
-  function switchDocument(id) {
+  async function switchDocument(name) {
     // Flush pending save
     clearTimeout(saveTimer);
-    Documents.save(editor.value);
+    await Documents.save(editor.value);
 
-    const doc = Documents.load(id);
+    const doc = await Documents.load(name);
     if (!doc) return;
 
     editor.value = doc.content;
@@ -904,12 +796,12 @@ Click **Export** in the top bar for three options:
     editor.focus();
   }
 
-  newDocBtn.addEventListener('click', () => {
+  newDocBtn.addEventListener('click', async () => {
     // Save current document first
     clearTimeout(saveTimer);
-    Documents.save(editor.value);
+    await Documents.save(editor.value);
 
-    const doc = Documents.create();
+    const doc = await Documents.create();
     editor.value = doc.content;
     docTitle.textContent = doc.title;
 
