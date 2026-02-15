@@ -2,6 +2,8 @@
 
 A distraction-free Markdown editor with live preview, styled with [Edward Tufte's CSS](https://edwardtufte.github.io/tufte-css/). Get to writing fast, with simple, clean typography.
 
+[![Watch the demo](https://img.youtube.com/vi/QDwjTlSwRNg/maxresdefault.jpg)](https://youtu.be/QDwjTlSwRNg)
+
 ![Tufte Editor](tufte.png)
 
 Documents are plain `.md` files on disk. Images are regular files. No build step, no dependencies, no accounts — just `node server.js` and write.
