@@ -4,7 +4,9 @@ A distraction-free Markdown editor with live preview, styled with [Edward Tufte'
 
 Documents are plain `.md` files on disk. Images are regular files. No build step, no dependencies, no accounts — just `node server.js` and write.
 
-**Note: This project was built entirely through conversation with Claude (Anthropic). I designed the concept, workflow, and feature set; Claude wrote all the code. I am not a JavaScript developer. Use accordingly — contributions and code review welcome**
+🤖 Full disclosure: This project was built entirely through conversation with Claude (Anthropic). I designed the concept, workflow, and feature set; Claude wrote all the code. I am not a JavaScript developer. The code has not been independently audited. Contributions, code review, and bug reports are very welcome!
+
+⚠️ Local use only. This editor runs an unauthenticated HTTP server. It is designed for personal use on your own machine — do not expose it to the public internet or untrusted networks. There is no login, no access control, and no encryption. Anyone who can reach the server can read, edit, and delete your documents.
 
 ## Quick start
 

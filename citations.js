@@ -236,12 +236,17 @@ const Citations = (function () {
     _urlCitations = [];
   }
 
+  function citationLink(number, label, titleAttr) {
+    const title = titleAttr ? ` title="${escapeAttr(titleAttr)}"` : '';
+    return `<a class="citation" href="#ref-${number}"${title}>${label}</a>`;
+  }
+
   function formatInlineCitation(key) {
     const lowerKey = key.toLowerCase();
     const entry = _bibliography.get(lowerKey);
 
     if (!entry) {
-      return `<span class="citation-error">[@${escapeHtmlCite(key)}]</span>`;
+      return `<span class="citation-error">[@${escapeHtml(key)}]</span>`;
     }
 
     let number;
@@ -254,26 +259,26 @@ const Citations = (function () {
       _citedKeySet.add(lowerKey);
     }
 
+    const refText = formatReferenceText(entry);
     if (_citationStyle === 'apa') {
       const lastName = getLastName(entry.author);
       const year = entry.year || 'n.d.';
-      return `<a class="citation" href="#ref-${number}" title="${escapeAttrCite(formatReferenceText(entry))}">(${escapeHtmlCite(lastName)}, ${escapeHtmlCite(year)})</a>`;
+      return citationLink(number, `(${escapeHtml(lastName)}, ${escapeHtml(year)})`, refText);
     }
 
-    return `<a class="citation" href="#ref-${number}" title="${escapeAttrCite(formatReferenceText(entry))}">[${number}]</a>`;
+    return citationLink(number, `[${number}]`, refText);
   }
 
   function formatInlineUrlCitation(url) {
+    let domain;
+    try { domain = new URL(url).hostname; } catch (e) { domain = url; }
+
     // Check if already cited
     const existing = _urlCitations.find(u => u.url === url);
     if (existing) {
       const number = _citedKeys.indexOf('__url__' + url) + 1;
-      if (_citationStyle === 'apa') {
-        let domain;
-        try { domain = new URL(url).hostname; } catch (e) { domain = url; }
-        return `<a class="citation" href="#ref-${number}">(${escapeHtmlCite(domain)})</a>`;
-      }
-      return `<a class="citation" href="#ref-${number}">[${number}]</a>`;
+      if (_citationStyle === 'apa') return citationLink(number, `(${escapeHtml(domain)})`);
+      return citationLink(number, `[${number}]`);
     }
 
     _citeCounter++;
@@ -283,12 +288,8 @@ const Citations = (function () {
     _citedKeySet.add(urlKey);
     _urlCitations.push({ url, number });
 
-    if (_citationStyle === 'apa') {
-      let domain;
-      try { domain = new URL(url).hostname; } catch (e) { domain = url; }
-      return `<a class="citation" href="#ref-${number}">(${escapeHtmlCite(domain)})</a>`;
-    }
-    return `<a class="citation" href="#ref-${number}">[${number}]</a>`;
+    if (_citationStyle === 'apa') return citationLink(number, `(${escapeHtml(domain)})`);
+    return citationLink(number, `[${number}]`);
   }
 
   function renderReferencesSection() {
@@ -302,7 +303,7 @@ const Citations = (function () {
 
       if (key.startsWith('__url__')) {
         const url = key.substring(7);
-        html += `<li id="ref-${num}"><a href="${escapeAttrCite(url)}">${escapeHtmlCite(url)}</a></li>`;
+        html += `<li id="ref-${num}"><a href="${escapeAttr(url)}">${escapeHtml(url)}</a></li>`;
       } else {
         const entry = _bibliography.get(key);
         if (entry) {
@@ -343,24 +344,24 @@ const Citations = (function () {
 
   function formatNumberedReference(entry) {
     const parts = [];
-    if (entry.author) parts.push(escapeHtmlCite(normalizeAuthors(entry.author)));
-    if (entry.title) parts.push(`"${escapeHtmlCite(entry.title)}"`);
-    if (entry.journal) parts.push(`<em>${escapeHtmlCite(entry.journal)}</em>`);
-    if (entry.publisher) parts.push(escapeHtmlCite(entry.publisher));
+    if (entry.author) parts.push(escapeHtml(normalizeAuthors(entry.author)));
+    if (entry.title) parts.push(`"${escapeHtml(entry.title)}"`);
+    if (entry.journal) parts.push(`<em>${escapeHtml(entry.journal)}</em>`);
+    if (entry.publisher) parts.push(escapeHtml(entry.publisher));
     if (entry.volume) {
-      let vol = 'vol. ' + escapeHtmlCite(entry.volume);
-      if (entry.pages) vol += ', pp. ' + escapeHtmlCite(entry.pages);
+      let vol = 'vol. ' + escapeHtml(entry.volume);
+      if (entry.pages) vol += ', pp. ' + escapeHtml(entry.pages);
       parts.push(vol);
     } else if (entry.pages) {
-      parts.push('pp. ' + escapeHtmlCite(entry.pages));
+      parts.push('pp. ' + escapeHtml(entry.pages));
     }
-    if (entry.year) parts.push(escapeHtmlCite(entry.year));
+    if (entry.year) parts.push(escapeHtml(entry.year));
 
     let ref = parts.join(', ') + '.';
     if (entry.doi) {
-      ref += ` <a href="https://doi.org/${escapeAttrCite(entry.doi)}">doi:${escapeHtmlCite(entry.doi)}</a>`;
+      ref += ` <a href="https://doi.org/${escapeAttr(entry.doi)}">doi:${escapeHtml(entry.doi)}</a>`;
     } else if (entry.url) {
-      ref += ` <a href="${escapeAttrCite(entry.url)}">${escapeHtmlCite(entry.url)}</a>`;
+      ref += ` <a href="${escapeAttr(entry.url)}">${escapeHtml(entry.url)}</a>`;
     }
     return ref;
   }
@@ -368,24 +369,24 @@ const Citations = (function () {
   function formatAPAReference(entry) {
     const parts = [];
     if (entry.author) {
-      parts.push(escapeHtmlCite(formatAPAAuthors(entry.author)));
+      parts.push(escapeHtml(formatAPAAuthors(entry.author)));
     }
-    if (entry.year) parts.push(`(${escapeHtmlCite(entry.year)})`);
-    if (entry.title) parts.push(escapeHtmlCite(entry.title));
+    if (entry.year) parts.push(`(${escapeHtml(entry.year)})`);
+    if (entry.title) parts.push(escapeHtml(entry.title));
     if (entry.journal) {
-      let journalPart = `<em>${escapeHtmlCite(entry.journal)}</em>`;
-      if (entry.volume) journalPart += `, <em>${escapeHtmlCite(entry.volume)}</em>`;
-      if (entry.pages) journalPart += `, ${escapeHtmlCite(entry.pages)}`;
+      let journalPart = `<em>${escapeHtml(entry.journal)}</em>`;
+      if (entry.volume) journalPart += `, <em>${escapeHtml(entry.volume)}</em>`;
+      if (entry.pages) journalPart += `, ${escapeHtml(entry.pages)}`;
       parts.push(journalPart);
     } else {
-      if (entry.publisher) parts.push(escapeHtmlCite(entry.publisher));
+      if (entry.publisher) parts.push(escapeHtml(entry.publisher));
     }
 
     let ref = parts.join('. ').replace(/\.\./g, '.') + '.';
     if (entry.doi) {
-      ref += ` <a href="https://doi.org/${escapeAttrCite(entry.doi)}">https://doi.org/${escapeHtmlCite(entry.doi)}</a>`;
+      ref += ` <a href="https://doi.org/${escapeAttr(entry.doi)}">https://doi.org/${escapeHtml(entry.doi)}</a>`;
     } else if (entry.url) {
-      ref += ` <a href="${escapeAttrCite(entry.url)}">${escapeHtmlCite(entry.url)}</a>`;
+      ref += ` <a href="${escapeAttr(entry.url)}">${escapeHtml(entry.url)}</a>`;
     }
     return ref;
   }
@@ -414,22 +415,14 @@ const Citations = (function () {
 
   /* ── Helpers ── */
 
-  function escapeHtmlCite(s) {
-    if (!s) return '';
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
-  function escapeAttrCite(s) {
-    if (!s) return '';
-    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
+  // escapeHtml and escapeAttr are globals from parser.js (loaded first)
 
   function getCitationCSS() {
     return `
 .citation { text-decoration: none; color: inherit; }
 .citation:hover { text-decoration: underline; }
 .citation-error { color: #c00; border-bottom: 1px dashed #c00; }
-.references { border-top: 1px solid #ccc; margin-top: 3rem; padding-top: 1.5rem; }
+.references { clear: both; border-top: 1px solid #ccc; margin-top: 3rem; padding-top: 1.5rem; }
 .references h2 { font-size: 1.4rem; margin-bottom: 1rem; }
 .references-list { padding-left: 1.5em; }
 .references-list li { margin-bottom: 0.75em; line-height: 1.5; }

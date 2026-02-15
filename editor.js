@@ -22,6 +22,7 @@
   docTitle.textContent = initDoc.title;
   updatePreview();
   updateWordCount();
+  editor.focus();
 
   /* ── Live Preview ── */
   let previewTimer;
@@ -98,6 +99,12 @@
     pointer: -1,
     MAX: 200,
 
+    reset() {
+      this.states = [];
+      this.pointer = -1;
+      this.save();
+    },
+
     save() {
       const state = { value: editor.value, selStart: editor.selectionStart, selEnd: editor.selectionEnd };
       if (this.pointer < this.states.length - 1) {
@@ -142,6 +149,14 @@
   };
 
   history.save();
+
+  function loadDocument(doc) {
+    editor.value = doc.content;
+    docTitle.textContent = doc.title;
+    history.reset();
+    updatePreview();
+    updateWordCount();
+  }
 
   document.getElementById('undo-btn').addEventListener('click', () => history.undo());
   document.getElementById('redo-btn').addEventListener('click', () => history.redo());
@@ -246,8 +261,9 @@
   });
 
   /* ── Split Pane Resizer ── */
-  const divider   = document.querySelector('.divider');
-  const editorPane = document.querySelector('.editor-pane');
+  const splitPane   = document.querySelector('.split-pane');
+  const divider     = document.querySelector('.divider');
+  const editorPane  = document.querySelector('.editor-pane');
   const previewPane = document.querySelector('.preview-pane');
 
   let dragging = false;
@@ -262,21 +278,14 @@
 
   document.addEventListener('mousemove', (e) => {
     if (!dragging) return;
-    const container = document.querySelector('.split-pane');
-    const rect = container.getBoundingClientRect();
-    const isVertical = window.innerWidth <= 640;
-
-    if (isVertical) {
-      const pct = ((e.clientY - rect.top) / rect.height) * 100;
-      const clamped = Math.max(20, Math.min(80, pct));
-      editorPane.style.flex = `0 0 ${clamped}%`;
-      previewPane.style.flex = `0 0 ${100 - clamped}%`;
-    } else {
-      const pct = ((e.clientX - rect.left) / rect.width) * 100;
-      const clamped = Math.max(20, Math.min(80, pct));
-      editorPane.style.flex = `0 0 ${clamped}%`;
-      previewPane.style.flex = `0 0 ${100 - clamped}%`;
-    }
+    const rect = splitPane.getBoundingClientRect();
+    const vertical = window.innerWidth <= 640;
+    const pct = vertical
+      ? ((e.clientY - rect.top) / rect.height) * 100
+      : ((e.clientX - rect.left) / rect.width) * 100;
+    const clamped = Math.max(20, Math.min(80, pct));
+    editorPane.style.flex = `0 0 ${clamped}%`;
+    previewPane.style.flex = `0 0 ${100 - clamped}%`;
   });
 
   document.addEventListener('mouseup', () => {
@@ -318,13 +327,9 @@
       a.download = title.replace(/[^a-zA-Z0-9 _-]/g, '') + '.html';
       a.click();
       URL.revokeObjectURL(url);
-    }
-
-    if (action === 'print') {
+    } else if (action === 'print') {
       window.print();
-    }
-
-    if (action === 'markdown') {
+    } else if (action === 'markdown') {
       navigator.clipboard.writeText(editor.value).then(() => {
         btn.textContent = 'Copied!';
         setTimeout(() => { btn.textContent = 'Copy Markdown'; }, 1500);
@@ -394,6 +399,18 @@
     }
   });
 
+  /* ── Modal Helper ── */
+  function setupModal(overlay, openBtn, closeBtn, onOpen) {
+    openBtn.addEventListener('click', () => {
+      if (onOpen) onOpen();
+      overlay.style.display = 'flex';
+    });
+    closeBtn.addEventListener('click', () => { overlay.style.display = 'none'; });
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.style.display = 'none';
+    });
+  }
+
   /* ── Bibliography Modal ── */
   const bibBtn    = document.getElementById('bib-btn');
   const bibModal  = document.getElementById('bib-modal');
@@ -409,19 +426,10 @@
     bibStatus.textContent = count > 0 ? count + ' entr' + (count === 1 ? 'y' : 'ies') + ' loaded' : '';
   }
 
-  bibBtn.addEventListener('click', () => {
+  setupModal(bibModal, bibBtn, bibCancel, () => {
     bibText.value = '';
     bibFile.value = '';
     updateBibStatus();
-    bibModal.style.display = 'flex';
-  });
-
-  bibCancel.addEventListener('click', () => {
-    bibModal.style.display = 'none';
-  });
-
-  bibModal.addEventListener('click', (e) => {
-    if (e.target === bibModal) bibModal.style.display = 'none';
   });
 
   bibFile.addEventListener('change', (e) => {
@@ -497,18 +505,7 @@
     });
   }
 
-  imgManageBtn.addEventListener('click', () => {
-    renderImageModal();
-    imgModal.style.display = 'flex';
-  });
-
-  imgClose.addEventListener('click', () => {
-    imgModal.style.display = 'none';
-  });
-
-  imgModal.addEventListener('click', (e) => {
-    if (e.target === imgModal) imgModal.style.display = 'none';
-  });
+  setupModal(imgModal, imgManageBtn, imgClose, renderImageModal);
 
   imgUploadMore.addEventListener('click', () => imgFileInput.click());
 
@@ -788,13 +785,7 @@
         e.stopPropagation();
         if (!confirm('Delete "' + (doc.title || 'Untitled Document') + '"?')) return;
         const result = await Documents.deleteDoc(doc.name);
-        editor.value = result.content;
-        docTitle.textContent = result.title;
-        history.states = [];
-        history.pointer = -1;
-        history.save();
-        updatePreview();
-        updateWordCount();
+        loadDocument(result);
         renderSidebar();
       });
       item.appendChild(del);
@@ -816,16 +807,7 @@
     const doc = await Documents.load(name);
     if (!doc) return;
 
-    editor.value = doc.content;
-    docTitle.textContent = doc.title;
-
-    // Reset undo history
-    history.states = [];
-    history.pointer = -1;
-    history.save();
-
-    updatePreview();
-    updateWordCount();
+    loadDocument(doc);
     hideAutocomplete();
     renderSidebar();
     editor.focus();
@@ -837,16 +819,7 @@
     await Documents.save(editor.value);
 
     const doc = await Documents.create();
-    editor.value = doc.content;
-    docTitle.textContent = doc.title;
-
-    // Reset undo history
-    history.states = [];
-    history.pointer = -1;
-    history.save();
-
-    updatePreview();
-    updateWordCount();
+    loadDocument(doc);
     renderSidebar();
 
     // Focus title and select it for editing

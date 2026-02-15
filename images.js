@@ -32,27 +32,27 @@ const ImageStore = (function () {
     return _images.has(src) ? '/uploads/' + encodeURIComponent(src) : null;
   }
 
+  async function fetchAsDataURL(url) {
+    const blob = await (await fetch(url)).blob();
+    return new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  }
+
   async function resolveInHTML(html) {
     const temp = document.createElement('div');
     temp.innerHTML = html;
     const imgs = temp.querySelectorAll('img');
     const promises = [];
-    imgs.forEach(img => {
+    for (const img of imgs) {
       const src = img.getAttribute('src');
-      // Check if it's an uploads path
       const decoded = decodeURIComponent(src.replace(/^\/uploads\//, ''));
       if (src.startsWith('/uploads/') && _images.has(decoded)) {
-        promises.push(
-          fetch(src)
-            .then(r => r.blob())
-            .then(blob => new Promise(resolve => {
-              const reader = new FileReader();
-              reader.onload = () => { img.setAttribute('src', reader.result); resolve(); };
-              reader.readAsDataURL(blob);
-            }))
-        );
+        promises.push(fetchAsDataURL(src).then(dataURL => { img.setAttribute('src', dataURL); }));
       }
-    });
+    }
     await Promise.all(promises);
     return temp.innerHTML;
   }

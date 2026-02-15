@@ -218,6 +218,14 @@ async function testPathTraversal() {
   r = await api('DELETE', '/api/uploads/..%2F..%2Fserver.js');
   assert(r.status === 404, 'traversal in uploads blocked');
   assert(fs.existsSync(path.join(ROOT, 'server.js')), 'server.js still exists');
+
+  // Static file traversal — sibling directory prefix attack
+  r = await api('GET', '/..%2F');
+  assert(r.status === 403 || r.status === 404, 'static traversal above root blocked');
+
+  // Malformed JSON in PATCH
+  r = await api('PATCH', '/api/docs/guide.md', 'not json', { 'Content-Type': 'application/json' });
+  assert(r.status === 400, 'malformed JSON returns 400');
 }
 
 function testParser() {

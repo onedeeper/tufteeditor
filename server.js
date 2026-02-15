@@ -42,10 +42,17 @@ function sendText(res, status, text) {
   res.end(text);
 }
 
+const MAX_BODY = 50 * 1024 * 1024; // 50 MB
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on('data', c => chunks.push(c));
+    let size = 0;
+    req.on('data', c => {
+      size += c.length;
+      if (size > MAX_BODY) { req.destroy(); reject(new Error('Body too large')); return; }
+      chunks.push(c);
+    });
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
@@ -71,7 +78,7 @@ function handleDocsAPI(req, res, urlPath) {
     return sendJSON(res, 200, docs);
   }
 
-  const name = safeName(decodeURIComponent(route));
+  const name = safeName(route);
   if (!name || !name.endsWith('.md')) {
     return sendJSON(res, 400, { error: 'Invalid document name' });
   }
@@ -89,14 +96,17 @@ function handleDocsAPI(req, res, urlPath) {
     return readBody(req).then(body => {
       fs.writeFileSync(filePath, body.toString('utf-8'));
       sendJSON(res, 200, { ok: true });
-    });
+    }).catch(err => sendJSON(res, 400, { error: err.message }));
   }
 
   // PATCH /api/docs/:name — rename doc
   if (req.method === 'PATCH') {
     return readBody(req).then(body => {
-      const { newName } = JSON.parse(body.toString('utf-8'));
-      const safeDst = safeName(newName);
+      let parsed;
+      try { parsed = JSON.parse(body.toString('utf-8')); } catch {
+        return sendJSON(res, 400, { error: 'Invalid JSON' });
+      }
+      const safeDst = safeName(parsed.newName || '');
       if (!safeDst || !safeDst.endsWith('.md')) {
         return sendJSON(res, 400, { error: 'Invalid new name' });
       }
@@ -107,7 +117,7 @@ function handleDocsAPI(req, res, urlPath) {
       if (!fs.existsSync(filePath)) return sendJSON(res, 404, { error: 'Not found' });
       fs.renameSync(filePath, dstPath);
       sendJSON(res, 200, { ok: true, name: safeDst });
-    });
+    }).catch(err => sendJSON(res, 400, { error: err.message }));
   }
 
   // DELETE /api/docs/:name
@@ -136,12 +146,12 @@ function handleUploadsAPI(req, res, urlPath) {
     return readBody(req).then(body => {
       fs.writeFileSync(path.join(UPLOADS_DIR, filename), body);
       sendJSON(res, 200, { ok: true, name: filename });
-    });
+    }).catch(err => sendJSON(res, 400, { error: err.message }));
   }
 
   // DELETE /api/uploads/:name
   if (req.method === 'DELETE' && route !== '') {
-    const name = safeName(decodeURIComponent(route));
+    const name = safeName(route);
     const filePath = path.join(UPLOADS_DIR, name);
     if (!fs.existsSync(filePath)) return sendJSON(res, 404, { error: 'Not found' });
     fs.unlinkSync(filePath);
@@ -156,7 +166,7 @@ function handleUploadsAPI(req, res, urlPath) {
 function serveStatic(req, res, urlPath) {
   // Serve uploaded files from /uploads/
   if (urlPath.startsWith('/uploads/')) {
-    const name = safeName(decodeURIComponent(urlPath.replace(/^\/uploads\//, '')));
+    const name = safeName(urlPath.slice('/uploads/'.length));
     const filePath = path.join(UPLOADS_DIR, name);
     if (!fs.existsSync(filePath)) {
       res.writeHead(404);
@@ -171,8 +181,8 @@ function serveStatic(req, res, urlPath) {
   let filePath = path.join(ROOT, urlPath === '/' ? 'index.html' : urlPath);
   filePath = path.normalize(filePath);
 
-  // Prevent path traversal
-  if (!filePath.startsWith(ROOT)) {
+  // Prevent path traversal — must be strictly inside ROOT
+  if (!filePath.startsWith(ROOT + path.sep) && filePath !== ROOT) {
     res.writeHead(403);
     return res.end('Forbidden');
   }
@@ -202,6 +212,6 @@ const server = http.createServer((req, res) => {
   serveStatic(req, res, urlPath);
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '127.0.0.1', () => {
   console.log(`Tufte Editor running at http://localhost:${PORT}`);
 });

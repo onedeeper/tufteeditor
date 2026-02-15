@@ -8,6 +8,10 @@ const Documents = (function () {
   let _docs = [];       // cached list: [{name, title, mtime}]
   let _activeDoc = null; // filename of active doc
 
+  async function fetchContent(name) {
+    return (await fetch('/api/docs/' + encodeURIComponent(name))).text();
+  }
+
   function sanitize(title) {
     return title.replace(/[\/\\:*?"<>|]/g, '').trim() || 'Untitled Document';
   }
@@ -26,7 +30,7 @@ const Documents = (function () {
     _activeDoc = entry.name;
     localStorage.setItem(ACTIVE_KEY, _activeDoc);
 
-    const content = await (await fetch('/api/docs/' + encodeURIComponent(_activeDoc))).text();
+    const content = await fetchContent(_activeDoc);
     return { name: _activeDoc, title: entry.title, content };
   }
 
@@ -58,7 +62,7 @@ const Documents = (function () {
     if (!entry) return null;
     _activeDoc = name;
     localStorage.setItem(ACTIVE_KEY, _activeDoc);
-    const content = await (await fetch('/api/docs/' + encodeURIComponent(name))).text();
+    const content = await fetchContent(name);
     return { name, title: entry.title, content };
   }
 
@@ -103,10 +107,7 @@ const Documents = (function () {
     _docs = _docs.filter(d => d.name !== name);
 
     if (_docs.length === 0) {
-      // Create a fresh doc
-      const fresh = await create();
-      const content = await (await fetch('/api/docs/' + encodeURIComponent(fresh.name))).text();
-      return { name: fresh.name, title: fresh.title, content };
+      return create();
     }
 
     if (_activeDoc === name) {
@@ -114,7 +115,7 @@ const Documents = (function () {
       localStorage.setItem(ACTIVE_KEY, _activeDoc);
     }
 
-    const content = await (await fetch('/api/docs/' + encodeURIComponent(_activeDoc))).text();
+    const content = await fetchContent(_activeDoc);
     const entry = _docs.find(d => d.name === _activeDoc);
     return { name: _activeDoc, title: entry.title, content };
   }

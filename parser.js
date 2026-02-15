@@ -16,21 +16,21 @@ function resetCounters() {
 
 /* ── Inline Pass ── */
 
+function marginToggleHTML(id, labelContent, spanClass, spanContent) {
+  return `<label class="margin-toggle${labelContent === '' ? ' sidenote-number' : ''}" for="${id}">${labelContent}</label>` +
+         `<input type="checkbox" id="${id}" class="margin-toggle"/>` +
+         `<span class="${spanClass}">${spanContent}</span>`;
+}
+
 function parseInline(text) {
   // Sidenotes: {sn:text}
   text = text.replace(/\{sn:([^}]+)\}/g, (_, content) => {
-    const id = 'sn-' + (++_snCounter);
-    return `<label class="margin-toggle sidenote-number" for="${id}"></label>` +
-           `<input type="checkbox" id="${id}" class="margin-toggle"/>` +
-           `<span class="sidenote">${content}</span>`;
+    return marginToggleHTML('sn-' + (++_snCounter), '', 'sidenote', content);
   });
 
   // Margin notes: {mn:text}
   text = text.replace(/\{mn:([^}]+)\}/g, (_, content) => {
-    const id = 'mn-' + (++_mnCounter);
-    return `<label class="margin-toggle" for="${id}">&#8853;</label>` +
-           `<input type="checkbox" id="${id}" class="margin-toggle"/>` +
-           `<span class="marginnote">${content}</span>`;
+    return marginToggleHTML('mn-' + (++_mnCounter), '&#8853;', 'marginnote', content);
   });
 
   // New thought: {newthought:text}
@@ -51,10 +51,7 @@ function parseInline(text) {
     const imgTag = `<img src="${escapeAttr(url)}" alt="${escapeAttr(caption)}"${sizeStyle}/>`;
 
     if (modifier === 'margin') {
-      const id = 'mn-fig-' + (++_mnCounter);
-      return `<label class="margin-toggle" for="${id}">&#8853;</label>` +
-             `<input type="checkbox" id="${id}" class="margin-toggle"/>` +
-             `<span class="marginnote">${imgTag}${caption ? '<br>' + caption : ''}</span>`;
+      return marginToggleHTML('mn-fig-' + (++_mnCounter), '&#8853;', 'marginnote', imgTag + (caption ? '<br>' + caption : ''));
     }
 
     if (modifier === 'fullwidth') {
@@ -82,11 +79,13 @@ function parseInline(text) {
 }
 
 function escapeAttr(s) {
-  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (!s) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function escapeHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (!s) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /* ── Block-level Pass ── */
@@ -223,7 +222,7 @@ function parseMarkdown(src) {
     html += `<p${dl}>${parseInline(block.replace(/\n/g, ' '))}</p>\n`;
   }
 
-  if (inSection) html += '</section>\n';
+  if (inSection || openedImplicitSection) html += '</section>\n';
 
   html += Citations.renderReferencesSection();
 
@@ -240,7 +239,7 @@ function generateFullHTML(bodyHTML, title) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${escapeHtml(title || 'Untitled')}</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tufte-css/1.8.0/tufte.min.css">
-<style>body { padding: 2rem 0; }${Citations.getCitationCSS()}</style>
+<style>body { padding: 2rem 0; } section { display: flow-root; }${Citations.getCitationCSS()}</style>
 </head>
 <body>
 <article>
