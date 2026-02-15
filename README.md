@@ -20,6 +20,7 @@ Open [http://localhost:3000](http://localhost:3000). Two starter documents are i
 - Sidenotes, margin notes, epigraphs, and new-thought markers
 - Image uploads with drag-and-drop management
 - BibTeX citations with autocomplete and numbered/APA styles
+- Double-click anywhere in the preview to jump to that spot in the editor
 - Keyboard shortcuts for bold, italic, undo/redo, and save
 
 **Documents**
@@ -59,9 +60,9 @@ Standard Markdown plus:
 | `{mn:text}` | Unnumbered margin note |
 | `{newthought:words}` | Opening words in small caps |
 | `> quote` / `> — Author` | Epigraph with attribution |
-| `![caption][50](url)` | Image at 50% width |
-| `![caption][100](url){fullwidth}` | Full-width figure |
-| `![caption][100](url){margin}` | Margin figure |
+| `![caption][50](https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/300px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg)` | Image at 50% width |
+| `![caption][100](https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/Camille_Pissarro_-_Boulevard_Montmartre_-_Eremitage.jpg/1280px-Camille_Pissarro_-_Boulevard_Montmartre_-_Eremitage.jpg){fullwidth}` | Full-width figure |
+| `![caption][100](https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Feather_pen.svg/240px-Feather_pen.svg.png){margin}` | Margin figure |
 | `@citekey` | Inline citation |
 | `@url[https://...]` | URL citation |
 

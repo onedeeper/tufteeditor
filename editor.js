@@ -57,6 +57,41 @@
     wordCount.textContent = words.length + ' word' + (words.length !== 1 ? 's' : '');
   }
 
+  /* ── Double-click Preview → Jump to Source ── */
+  preview.addEventListener('dblclick', (e) => {
+    // Walk up from click target to find nearest element with data-line
+    let el = e.target;
+    while (el && el !== preview) {
+      if (el.dataset && el.dataset.line !== undefined) break;
+      el = el.parentElement;
+    }
+    if (!el || el === preview || el.dataset.line === undefined) return;
+
+    const targetLine = parseInt(el.dataset.line, 10);
+    if (isNaN(targetLine)) return;
+
+    // Compute character offset of that line
+    const srcLines = editor.value.split('\n');
+    let offset = 0;
+    for (let i = 0; i < targetLine && i < srcLines.length; i++) {
+      offset += srcLines[i].length + 1;
+    }
+
+    // If in preview-only mode, switch to split
+    if (app.classList.contains('view-preview')) {
+      document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector('.view-btn[data-view="split"]').classList.add('active');
+      app.className = 'app view-split';
+    }
+
+    editor.focus();
+    editor.setSelectionRange(offset, offset);
+
+    // Scroll editor to show the target line (centered roughly)
+    const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 22;
+    editor.scrollTop = Math.max(0, targetLine * lineHeight - editor.clientHeight / 3);
+  });
+
   /* ── Undo / Redo ── */
   const history = {
     states: [],

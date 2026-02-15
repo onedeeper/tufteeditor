@@ -1,71 +1,55 @@
-# How to Use Tufte Editor
+# Tufte Editor Guide
 
-## The Interface
+{newthought:Welcome to the Tufte Markdown Editor.} A split-pane editor for writing in extended Markdown with a live preview styled after Edward Tufte's typographic principles. The left pane is your editor, the right is the preview. Use the **Edit**, **Split**, and **Preview** buttons to switch views, or drag the divider to resize. Double-click anything in the preview to jump to that spot in the source.
 
-{newthought:The editor is a split-pane layout.} The left pane is where you write in Markdown, and the right pane shows a live preview styled with Tufte CSS. Use the **Edit**, **Split**, and **Preview** buttons in the top bar to switch between views. Drag the divider to resize the panes.
+Documents are saved automatically as `.md` files on disk. The sidebar lists them all — click **+ New** to create one, click the title bar to rename, or click the **×** to delete.
 
-## Documents
+## Sidenotes and Margin Notes
 
-The sidebar on the left lists all your documents. Click **+ New** to create a new document, or click any document to switch to it. Click the title at the top to rename a document. Documents are saved automatically as you type.
+Sidenotes appear in the margin, numbered automatically.{sn:This is a sidenote. Write them with \`{sn:your text}\` right after the word they annotate.} They keep the reader's eye on the page instead of jumping to the bottom.
 
-## Writing
+Margin notes are similar but unnumbered.{mn:This is a margin note. Write them with \`{mn:your text}\`. Use these for supplementary remarks.} Good for commentary that doesn't need a reference number.
 
-You can use standard Markdown: **bold**, *italic*, `inline code`, [links](url), headings with `#`, lists with `-` or `1.`, blockquotes with `>`, code blocks with triple backticks, and horizontal rules with `---`.
+## New Thoughts
 
-## Tufte Tokens
+{newthought:Mark the start of a new idea} with `{newthought:Opening words}`. The opening words render in small caps — a classic Tufte convention for signaling a shift in topic.
 
-Beyond standard Markdown, this editor supports five tokens from Tufte's typographic style. You can type them manually or use the toolbar buttons.
+## Epigraphs
 
-### Sidenotes
+Write a blockquote with an attribution line starting with `—` or `--`:
 
-Add numbered notes in the margin with `{sn:Your note text}`. Place them inline right after the word they annotate.{sn:Like this sidenote right here.}
-
-### Margin Notes
-
-Add unnumbered margin notes with `{mn:Your note text}`.{mn:Margin notes work just like sidenotes but without a number.} Use these for supplementary remarks that don't need a reference number.
-
-### New Thoughts
-
-Mark the start of a new train of thought with `{newthought:Opening words}`. {newthought:This renders} the opening words in small caps.
-
-### Epigraphs
-
-Write a blockquote with an attribution line starting with `--` or `—`:
-
-> It is not enough to do your best; you must know what to do, and then do your best.
-> — W. Edwards Deming
+> The purpose of computing is insight, not numbers.
+> — Richard Hamming
 
 ## Images
 
-### From a URL
+![Mona Lisa, Leonardo da Vinci][40](https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/300px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg)
 
-Use the syntax `![caption][width%](url)`:
+Add `{fullwidth}` after the URL for a full-width figure, or `{margin}` for a margin figure.
 
-- `![My photo][50](https://example.com/photo.jpg)` — 50% width
-- `![Wide shot][100](url){fullwidth}` — full-width figure
-- `![Detail][100](url){margin}` — margin figure
+![Boulevard Montmartre, Camille Pissarro][100](https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/300px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg){fullwidth}
 
-The `[width%]` bracket is optional; omit it for default sizing.
-
-### Uploaded Images
-
-Click the **Images** button in the toolbar to manage uploaded images. You can upload new images and delete existing ones from the modal.
-
-Once uploaded, reference an image by its filename: `![caption][50](photo.jpg)`. As you type `@` in the editor, autocomplete will suggest uploaded image filenames alongside citation keys.
+Click the **Images** button in the toolbar to upload images from your computer. Once uploaded, reference them by filename. Autocomplete will suggest filenames as you type after `@`.
 
 ## Citations
 
-### Loading a Bibliography
+Click **Bib** in the toolbar to load BibTeX entries, then cite inline with `@citekey` — for example, `@tufte2001`. Autocomplete suggests matching keys as you type.
 
-Click the **Bib** button in the toolbar to open the bibliography modal. Paste BibTeX entries or load a `.bib` file, then click **Apply**.
+Cite URLs directly with `@url[https://example.com]`. A references section is generated automatically at the bottom of the document. Toggle between **[1]** numbered and **APA** styles in the top bar.
 
-### Citing References
+## Standard Markdown
 
-Once loaded, cite a reference inline with `@citekey` — for example, `@tufte2001`. Autocomplete will suggest matching keys as you type after `@`.
+All the usual formatting works: **bold**, *italic*, `inline code`, [hyperlinks](https://edwardtufte.github.io/tufte-css/), headings with `#`, lists with `-` or `1.`, blockquotes with `>`, and horizontal rules with `---`.
 
-To cite a URL directly, use `@url[https://example.com]`. A references section is generated automatically at the bottom of the document.
+```javascript
+function greet(name) {
+  return `Hello, ${name}!`;
+}
+```
 
-Toggle between **[1]** numbered and **APA** citation styles using the toggle in the top bar.
+- First item
+- Second item with **bold**
+- Third item
 
 ## Keyboard Shortcuts
 
@@ -78,8 +62,12 @@ Toggle between **[1]** numbered and **APA** citation styles using the toggle in 
 
 ## Exporting
 
-Click **Export** in the top bar for three options:
+Click **Export** in the top bar:
 
-- **Download HTML** — A standalone `.html` file with Tufte CSS, ready to open in any browser or host anywhere. Uploaded images are inlined automatically.
-- **Print / PDF** — Opens the browser print dialog. Use "Save as PDF" for a PDF export.
-- **Copy Markdown** — Copies the raw Markdown source to your clipboard.
+- **Download HTML** — Standalone `.html` with Tufte CSS. Uploaded images are inlined automatically.
+- **Print / PDF** — Opens the browser print dialog.
+- **Copy Markdown** — Copies raw source to clipboard.
+
+---
+
+{newthought:That covers everything.} Delete this document and start writing, or edit it to experiment with the syntax.

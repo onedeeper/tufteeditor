@@ -110,7 +110,6 @@ async function testDocsCRUD() {
   assert(r.status === 200, 'GET /api/docs returns 200');
   assert(Array.isArray(r.json), 'returns an array');
   const initial = r.json.length;
-  assert(r.json.some(d => d.name === 'welcome.md'), 'welcome.md in list');
   assert(r.json.some(d => d.name === 'guide.md'), 'guide.md in list');
   assert(r.json[0].mtime > 0, 'docs have mtime');
 
@@ -137,7 +136,7 @@ async function testDocsCRUD() {
   assert(fs.existsSync(path.join(DOCS_DIR, 'Renamed Doc.md')), 'new file exists');
 
   // Rename conflict
-  r = await api('PATCH', '/api/docs/Renamed%20Doc.md', JSON.stringify({ newName: 'welcome.md' }), { 'Content-Type': 'application/json' });
+  r = await api('PATCH', '/api/docs/Renamed%20Doc.md', JSON.stringify({ newName: 'guide.md' }), { 'Content-Type': 'application/json' });
   assert(r.status === 409, 'PATCH returns 409 on conflict');
 
   // Delete it
@@ -221,6 +220,61 @@ async function testPathTraversal() {
   assert(fs.existsSync(path.join(ROOT, 'server.js')), 'server.js still exists');
 }
 
+function testParser() {
+  console.log('\nParser data-line attributes');
+
+  // Load parser (it depends on Citations being global)
+  global.Citations = {
+    resetCitationTracking() {},
+    formatInlineCitation(k) { return '@' + k; },
+    formatInlineUrlCitation(u) { return u; },
+    getBibliographyCount() { return 0; },
+    renderReferencesSection() { return ''; },
+    getCitationCSS() { return ''; },
+  };
+  // Re-run parser source in this context
+  const parserSrc = fs.readFileSync(path.join(ROOT, 'parser.js'), 'utf-8');
+  const fn = new Function(parserSrc + '\nreturn parseMarkdown;');
+  const parseMarkdown = fn();
+
+  const md = [
+    '# Title',           // line 0
+    '',                   // line 1
+    'First paragraph.',   // line 2
+    '',                   // line 3
+    '## Section',         // line 4
+    '',                   // line 5
+    'Second paragraph.',  // line 6
+    '',                   // line 7
+    '- item one',         // line 8
+    '- item two',         // line 9
+    '',                   // line 10
+    '> A quote',          // line 11
+    '> — Author',         // line 12
+    '',                   // line 13
+    '```js',              // line 14
+    'code()',              // line 15
+    '```',                // line 16
+  ].join('\n');
+
+  const html = parseMarkdown(md);
+
+  // Check data-line attributes
+  assert(html.includes('data-line="0"'), 'h1 has data-line="0"');
+  assert(html.includes('data-line="2"'), 'first paragraph has data-line="2"');
+  assert(html.includes('data-line="4"'), 'h2 has data-line="4"');
+  assert(html.includes('data-line="6"'), 'second paragraph has data-line="6"');
+  assert(html.includes('data-line="8"'), 'list has data-line="8"');
+  assert(html.includes('data-line="11"'), 'epigraph has data-line="11"');
+  assert(html.includes('data-line="14"'), 'code block has data-line="14"');
+
+  // Verify element types got the attributes
+  assert(/h1 data-line="0"/.test(html), 'data-line on h1 element');
+  assert(/p data-line="2"/.test(html), 'data-line on p element');
+  assert(/ul data-line="8"/.test(html), 'data-line on ul element');
+  assert(/pre data-line="14"/.test(html), 'data-line on pre element');
+}
+
 // --- Main ---
 
 (async () => {
@@ -235,6 +289,7 @@ async function testPathTraversal() {
     await testUploads();
     await testStaticServing();
     await testPathTraversal();
+    testParser();
   } catch (err) {
     console.error('Fatal:', err);
     failed++;

@@ -97,22 +97,27 @@ function parseMarkdown(src) {
 
   const lines = src.split('\n');
   const blocks = [];
+  const blockLines = []; // source line index (0-based) where each block starts
   let current = [];
+  let currentStart = 0;
 
   // Group lines into blocks separated by blank lines
   // but keep fenced code blocks together
   let inCode = false;
-  for (const line of lines) {
+  for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+    const line = lines[lineIdx];
     if (/^```/.test(line)) {
       if (inCode) {
         current.push(line);
         blocks.push(current.join('\n'));
+        blockLines.push(currentStart);
         current = [];
         inCode = false;
         continue;
       } else {
-        if (current.length) { blocks.push(current.join('\n')); current = []; }
+        if (current.length) { blocks.push(current.join('\n')); blockLines.push(currentStart); current = []; }
         inCode = true;
+        currentStart = lineIdx;
         current.push(line);
         continue;
       }
@@ -122,12 +127,13 @@ function parseMarkdown(src) {
       continue;
     }
     if (line.trim() === '') {
-      if (current.length) { blocks.push(current.join('\n')); current = []; }
+      if (current.length) { blocks.push(current.join('\n')); blockLines.push(currentStart); current = []; }
     } else {
+      if (current.length === 0) currentStart = lineIdx;
       current.push(line);
     }
   }
-  if (current.length) blocks.push(current.join('\n'));
+  if (current.length) { blocks.push(current.join('\n')); blockLines.push(currentStart); }
 
   let html = '';
   let inSection = false;
@@ -135,19 +141,20 @@ function parseMarkdown(src) {
 
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i];
+    const dl = ` data-line="${blockLines[i]}"`;
 
     // Fenced code block
     if (/^```/.test(block)) {
       const codeLines = block.split('\n');
       const lang = codeLines[0].replace(/^```/, '').trim();
       const code = escapeHtml(codeLines.slice(1, -1).join('\n'));
-      html += `<pre><code${lang ? ` class="language-${lang}"` : ''}>${code}</code></pre>\n`;
+      html += `<pre${dl}><code${lang ? ` class="language-${lang}"` : ''}>${code}</code></pre>\n`;
       continue;
     }
 
     // Horizontal rule
     if (/^---+$/.test(block.trim())) {
-      html += '<hr/>\n';
+      html += `<hr${dl}/>\n`;
       continue;
     }
 
@@ -162,7 +169,7 @@ function parseMarkdown(src) {
         html += '<section>\n';
         inSection = true;
       }
-      html += `<h${level}>${text}</h${level}>\n`;
+      html += `<h${level}${dl}>${text}</h${level}>\n`;
       continue;
     }
 
@@ -187,9 +194,9 @@ function parseMarkdown(src) {
       }
       const quote = parseInline(contentLines.join(' '));
       if (footer) {
-        html += `<div class="epigraph"><blockquote><p>${quote}</p><footer>${parseInline(footer)}</footer></blockquote></div>\n`;
+        html += `<div class="epigraph"${dl}><blockquote><p>${quote}</p><footer>${parseInline(footer)}</footer></blockquote></div>\n`;
       } else {
-        html += `<blockquote><p>${quote}</p></blockquote>\n`;
+        html += `<blockquote${dl}><p>${quote}</p></blockquote>\n`;
       }
       continue;
     }
@@ -199,7 +206,7 @@ function parseMarkdown(src) {
       const items = block.split('\n')
         .filter(l => /^[-*]\s/.test(l))
         .map(l => `<li>${parseInline(l.replace(/^[-*]\s+/, ''))}</li>`);
-      html += `<ul>${items.join('')}</ul>\n`;
+      html += `<ul${dl}>${items.join('')}</ul>\n`;
       continue;
     }
 
@@ -208,12 +215,12 @@ function parseMarkdown(src) {
       const items = block.split('\n')
         .filter(l => /^\d+\.\s/.test(l))
         .map(l => `<li>${parseInline(l.replace(/^\d+\.\s+/, ''))}</li>`);
-      html += `<ol>${items.join('')}</ol>\n`;
+      html += `<ol${dl}>${items.join('')}</ol>\n`;
       continue;
     }
 
     // Paragraph (default)
-    html += `<p>${parseInline(block.replace(/\n/g, ' '))}</p>\n`;
+    html += `<p${dl}>${parseInline(block.replace(/\n/g, ' '))}</p>\n`;
   }
 
   if (inSection) html += '</section>\n';
