@@ -787,6 +787,12 @@ a.citation:hover {
   text-decoration: underline;
 }
 
+/* ── Code Blocks ── */
+.preview-content pre {
+  width: 55%;
+  overflow-x: auto;
+}
+
 /* ── Display Math ── */
 .math-display {
   width: 55%;

@@ -276,7 +276,7 @@ function generateFullHTML(bodyHTML, title) {
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tufte-css/1.8.0/tufte.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
-<style>body { padding: 2rem 0; } section { display: flow-root; } figure { text-align: center; } figcaption { margin-top: 0.4em; font-size: 0.875rem; }${Citations.getCitationCSS()}</style>
+<style>body { padding: 2rem 0; } section { display: flow-root; } pre { width: 55%; overflow-x: auto; } figure { text-align: center; } figcaption { margin-top: 0.4em; font-size: 0.875rem; }${Citations.getCitationCSS()}</style>
 </head>
 <body>
 <article>
