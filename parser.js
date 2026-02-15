@@ -23,6 +23,20 @@ function marginToggleHTML(id, labelContent, spanClass, spanContent) {
 }
 
 function parseInline(text) {
+  const placeholders = [];
+
+  // Extract inline code → placeholders (before other processing to prevent bold/italic inside code)
+  text = text.replace(/`([^`]+)`/g, (_, code) => {
+    placeholders.push('<code>' + escapeHtml(code) + '</code>');
+    return '\x00PH' + (placeholders.length - 1) + '\x00';
+  });
+
+  // Extract inline math $...$ → placeholders (before other processing to prevent bold/italic inside math)
+  text = text.replace(/\$([^\$\n]+?)\$/g, (_, math) => {
+    placeholders.push('<span class="math-inline">' + escapeHtml(math) + '</span>');
+    return '\x00PH' + (placeholders.length - 1) + '\x00';
+  });
+
   // Sidenotes: {sn:text}
   text = text.replace(/\{sn:([^}]+)\}/g, (_, content) => {
     return marginToggleHTML('sn-' + (++_snCounter), '', 'sidenote', content);
@@ -39,8 +53,9 @@ function parseInline(text) {
   });
 
   // Citations: @url[url] and @key — single pass for stable left-to-right numbering
-  text = text.replace(/@url\[([^\]]+)\]|(?<!\w)@([a-zA-Z][\w:-]*)/g, (match, urlMatch, keyMatch) => {
-    if (urlMatch !== undefined) return Citations.formatInlineUrlCitation(urlMatch);
+  text = text.replace(/@url\[([^\]]*)\]\[([^\]]+)\]|@url\[([^\]]+)\]|(?<!\w)@([a-zA-Z][\w:-]*)/g, (match, urlName, urlUrl, urlOnly, keyMatch) => {
+    if (urlUrl !== undefined) return Citations.formatInlineUrlCitation(urlUrl, urlName || '');
+    if (urlOnly !== undefined) return Citations.formatInlineUrlCitation(urlOnly);
     return Citations.formatInlineCitation(keyMatch);
   });
 
@@ -66,14 +81,14 @@ function parseInline(text) {
     return `<a href="${escapeAttr(url)}">${label}</a>`;
   });
 
-  // Inline code: `code`
-  text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
-
   // Bold: **text**
   text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
 
   // Italic: *text*
   text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+  // Restore placeholders (code and math)
+  text = text.replace(/\x00PH(\d+)\x00/g, (_, i) => placeholders[parseInt(i)]);
 
   return text;
 }
@@ -101,38 +116,51 @@ function parseMarkdown(src) {
   let currentStart = 0;
 
   // Group lines into blocks separated by blank lines
-  // but keep fenced code blocks together
-  let inCode = false;
+  // but keep fenced code blocks and $$ math blocks together
+  let fence = null; // null | 'code' | 'math'
+
+  function flushBlock() {
+    if (current.length) {
+      blocks.push(current.join('\n'));
+      blockLines.push(currentStart);
+      current = [];
+    }
+  }
+
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
     const line = lines[lineIdx];
-    if (/^```/.test(line)) {
-      if (inCode) {
-        current.push(line);
-        blocks.push(current.join('\n'));
-        blockLines.push(currentStart);
-        current = [];
-        inCode = false;
-        continue;
-      } else {
-        if (current.length) { blocks.push(current.join('\n')); blockLines.push(currentStart); current = []; }
-        inCode = true;
-        currentStart = lineIdx;
-        current.push(line);
-        continue;
-      }
+    const fenceType = /^```/.test(line) ? 'code' : /^\$\$$/.test(line.trim()) ? 'math' : null;
+
+    if (fenceType && fenceType === fence) {
+      // Closing fence
+      current.push(line);
+      flushBlock();
+      fence = null;
+      continue;
     }
-    if (inCode) {
+
+    if (fence) {
       current.push(line);
       continue;
     }
+
+    if (fenceType) {
+      // Opening fence
+      flushBlock();
+      fence = fenceType;
+      currentStart = lineIdx;
+      current.push(line);
+      continue;
+    }
+
     if (line.trim() === '') {
-      if (current.length) { blocks.push(current.join('\n')); blockLines.push(currentStart); current = []; }
+      flushBlock();
     } else {
       if (current.length === 0) currentStart = lineIdx;
       current.push(line);
     }
   }
-  if (current.length) { blocks.push(current.join('\n')); blockLines.push(currentStart); }
+  flushBlock();
 
   let html = '';
   let inSection = false;
@@ -148,6 +176,13 @@ function parseMarkdown(src) {
       const lang = codeLines[0].replace(/^```/, '').trim();
       const code = escapeHtml(codeLines.slice(1, -1).join('\n'));
       html += `<pre${dl}><code${lang ? ` class="language-${lang}"` : ''}>${code}</code></pre>\n`;
+      continue;
+    }
+
+    // Display math block
+    const mathMatch = block.match(/^\$\$([\s\S]*?)\$\$$/);
+    if (mathMatch && mathMatch[1].trim()) {
+      html += `<div class="math-display"${dl}>${escapeHtml(mathMatch[1].trim())}</div>\n`;
       continue;
     }
 
@@ -239,6 +274,8 @@ function generateFullHTML(bodyHTML, title) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${escapeHtml(title || 'Untitled')}</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tufte-css/1.8.0/tufte.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
 <style>body { padding: 2rem 0; } section { display: flow-root; }${Citations.getCitationCSS()}</style>
 </head>
 <body>

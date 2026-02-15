@@ -38,6 +38,20 @@
     undoTimer = setTimeout(() => history.save(), 400);
   });
 
+  function renderMathAndCode(el) {
+    if (typeof katex !== 'undefined') {
+      el.querySelectorAll('.math-inline').forEach(node => {
+        try { katex.render(node.textContent, node, { displayMode: false, throwOnError: false }); }
+        catch(e) {}
+      });
+      el.querySelectorAll('.math-display').forEach(node => {
+        try { katex.render(node.textContent, node, { displayMode: true, throwOnError: false }); }
+        catch(e) {}
+      });
+    }
+    if (typeof Prism !== 'undefined') Prism.highlightAllUnder(el);
+  }
+
   function updatePreview() {
     preview.innerHTML = parseMarkdown(editor.value);
     // Resolve uploaded image sources
@@ -48,6 +62,7 @@
         if (resolved) img.src = resolved;
       });
     }
+    renderMathAndCode(preview);
   }
 
   function updateWordCount() {
@@ -319,6 +334,11 @@
       const title = docTitle.textContent.trim() || 'Untitled';
       let bodyHTML = parseMarkdown(editor.value);
       if (ImageStore.getCount() > 0) bodyHTML = await ImageStore.resolveInHTML(bodyHTML);
+      // Pre-render math + code to static HTML (exported file only needs KaTeX CSS, not JS)
+      const temp = document.createElement('div');
+      temp.innerHTML = bodyHTML;
+      renderMathAndCode(temp);
+      bodyHTML = temp.innerHTML;
       const fullHTML = generateFullHTML(bodyHTML, title);
       const blob = new Blob([fullHTML], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
@@ -541,6 +561,62 @@
     return { start: i, end: pos, query };
   }
 
+  function isInMathContext(text, pos) {
+    let inDisplay = false;
+    let inInline = false;
+    let i = 0;
+    while (i < pos) {
+      if (text[i] === '$' && i + 1 < text.length && text[i + 1] === '$') {
+        if (inDisplay) { inDisplay = false; i += 2; continue; }
+        if (!inInline) { inDisplay = true; i += 2; continue; }
+      }
+      if (text[i] === '$') {
+        if (!inDisplay) inInline = !inInline;
+        i++; continue;
+      }
+      i++;
+    }
+    return inDisplay || inInline;
+  }
+
+  function getLatexQuery() {
+    const pos = editor.selectionStart;
+    if (pos !== editor.selectionEnd) return null;
+    const text = editor.value;
+    // Scan back for backslash + letters
+    let i = pos - 1;
+    while (i >= 0 && /[a-zA-Z]/.test(text[i])) i--;
+    if (i < 0 || text[i] !== '\\') return null;
+    // Verify we're inside math context
+    if (!isInMathContext(text, i)) return null;
+    const query = text.substring(i + 1, pos);
+    return { start: i, end: pos, query };
+  }
+
+  function getUrlCiteQuery() {
+    const pos = editor.selectionStart;
+    if (pos !== editor.selectionEnd) return null;
+    const text = editor.value;
+    // Scan backwards to find opening [
+    let i = pos - 1;
+    while (i >= 0 && text[i] !== '[' && text[i] !== ']' && text[i] !== '\n') i--;
+    if (i < 0 || text[i] !== '[') return null;
+    const query = text.substring(i + 1, pos);
+    // Case 1: @url[query|
+    if (i >= 4 && text.substring(i - 4, i) === '@url') {
+      return { start: i + 1, end: pos, query };
+    }
+    // Case 2: @url[name][query|  (second bracket)
+    if (i >= 1 && text[i - 1] === ']') {
+      let j = i - 2;
+      while (j >= 0 && text[j] !== '[' && text[j] !== '\n') j--;
+      if (j >= 4 && text.substring(j - 4, j) === '@url') {
+        return { start: i + 1, end: pos, query };
+      }
+    }
+    return null;
+  }
+
   function getCaretCoords() {
     const pos = editor.selectionStart;
     const mirror = document.createElement('div');
@@ -578,6 +654,45 @@
   }
 
   function showAutocomplete() {
+    // Try LaTeX first (always available inside math context)
+    const latexCtx = getLatexQuery();
+    if (latexCtx) {
+      const latexResults = LatexCompletions.search(latexCtx.query);
+      if (latexResults.length > 0) {
+        acContext = latexCtx;
+        acItems = latexResults.map(r => ({
+          type: 'latex', label: '\\' + r.name, detail: r.detail,
+          template: r.template, cursorOffset: r.cursorOffset
+        }));
+        acIndex = 0;
+        acActive = true;
+        renderAutocomplete();
+        positionAutocomplete();
+        return;
+      }
+    }
+
+    // URL citation autocomplete
+    const urlCtx = getUrlCiteQuery();
+    if (urlCtx) {
+      const urlResults = Citations.searchUrlStore(urlCtx.query);
+      if (urlResults.length > 0) {
+        acContext = urlCtx;
+        acItems = urlResults.map(r => ({
+          type: 'urlcite', url: r.url, label: r.url,
+          detail: r.name || undefined
+        }));
+        acIndex = 0;
+        acActive = true;
+        renderAutocomplete();
+        positionAutocomplete();
+        return;
+      }
+      hideAutocomplete();
+      return;
+    }
+
+    // Citations + Images
     const hasBib = Citations.getBibliographyCount() > 0;
     const hasImages = ImageStore.getCount() > 0;
     if (!hasBib && !hasImages) { hideAutocomplete(); return; }
@@ -658,6 +773,29 @@
     const item = acItems[index];
     history.save();
 
+    if (item.type === 'latex') {
+      editor.setRangeText(item.template, acContext.start, acContext.end, 'end');
+      if (item.cursorOffset > 0) {
+        const newPos = editor.selectionStart - item.cursorOffset;
+        editor.setSelectionRange(newPos, newPos);
+      }
+      hideAutocomplete();
+      editor.dispatchEvent(new Event('input'));
+      return;
+    }
+
+    if (item.type === 'urlcite') {
+      // Find end of current bracket content (consume up to ])
+      let endPos = acContext.end;
+      const text = editor.value;
+      while (endPos < text.length && text[endPos] !== ']' && text[endPos] !== '\n') endPos++;
+      if (endPos < text.length && text[endPos] === ']') endPos++; // include ]
+      editor.setRangeText(item.url + ']', acContext.start, endPos, 'end');
+      hideAutocomplete();
+      editor.dispatchEvent(new Event('input'));
+      return;
+    }
+
     let replacement;
     if (item.type === 'cite') {
       replacement = '@' + item.key;
@@ -676,7 +814,6 @@
     acIndex = 0;
     acContext = null;
     acDropdown.style.display = 'none';
-    checkSizeTooltip();
   }
 
   editor.addEventListener('input', () => { showAutocomplete(); checkSizeTooltip(); });
@@ -696,26 +833,17 @@
     if (pos !== editor.selectionEnd) { sizeTooltip.style.display = 'none'; return; }
 
     const text = editor.value;
+    const lineStart = text.lastIndexOf('\n', pos - 1) + 1;
+    const lineEnd = text.indexOf('\n', pos);
+    const line = text.substring(lineStart, lineEnd === -1 ? text.length : lineEnd);
+    const col = pos - lineStart;
 
-    // Walk backwards from cursor to find opening [
-    let i = pos - 1;
-    while (i >= 0 && text[i] !== '[' && text[i] !== ']' && text[i] !== '\n') i--;
-    if (i < 0 || text[i] !== '[') { sizeTooltip.style.display = 'none'; return; }
+    if (!/!\[[^\]]*\]\[[^\]]*$/.test(line.substring(0, col)) ||
+        !/^[^\]]*\]/.test(line.substring(col))) {
+      sizeTooltip.style.display = 'none';
+      return;
+    }
 
-    // This [ should be preceded by ] (closing caption brackets)
-    if (i < 1 || text[i - 1] !== ']') { sizeTooltip.style.display = 'none'; return; }
-
-    // Walk back to find opening [ of caption
-    let j = i - 2;
-    while (j >= 0 && text[j] !== '[' && text[j] !== '\n') j--;
-    if (j < 1 || text[j] !== '[' || text[j - 1] !== '!') { sizeTooltip.style.display = 'none'; return; }
-
-    // Check there's a closing ] after cursor
-    let k = pos;
-    while (k < text.length && text[k] !== ']' && text[k] !== '\n') k++;
-    if (k >= text.length || text[k] !== ']') { sizeTooltip.style.display = 'none'; return; }
-
-    // Show tooltip above cursor
     const coords = getCaretCoords();
     sizeTooltip.style.top = (coords.top - 26) + 'px';
     sizeTooltip.style.left = coords.left + 'px';

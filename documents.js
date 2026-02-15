@@ -128,10 +128,5 @@ const Documents = (function () {
     return _activeDoc;
   }
 
-  function getActiveTitle() {
-    const entry = _docs.find(d => d.name === _activeDoc);
-    return entry ? entry.title : '';
-  }
-
-  return { init, create, load, save, rename, deleteDoc, list, getActiveId, getActiveTitle };
+  return { init, create, load, save, rename, deleteDoc, list, getActiveId };
 })();

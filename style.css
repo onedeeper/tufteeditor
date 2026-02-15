@@ -103,15 +103,15 @@ body {
   gap: 8px;
 }
 
-/* View toggles */
-.view-toggles {
+/* Toggle groups (shared by view toggles and citation style toggle) */
+.toggle-group {
   display: flex;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
 }
 
-.view-btn {
+.toggle-btn {
   border: none;
   background: #fff;
   padding: 4px 10px;
@@ -121,15 +121,15 @@ body {
   font-family: var(--font);
 }
 
-.view-btn:not(:last-child) {
+.toggle-btn:not(:last-child) {
   border-right: 1px solid var(--border);
 }
 
-.view-btn:hover {
+.toggle-btn:hover {
   background: var(--bg-dark);
 }
 
-.view-btn.active {
+.toggle-btn.active {
   background: var(--accent);
   color: #fff;
 }
@@ -558,36 +558,6 @@ body {
   text-overflow: ellipsis;
 }
 
-/* ── Citation Style Toggle ── */
-.cite-style-toggle {
-  display: flex;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.cite-style-btn {
-  border: none;
-  background: #fff;
-  padding: 4px 10px;
-  font-size: 12px;
-  cursor: pointer;
-  color: var(--accent);
-  font-family: var(--font);
-}
-
-.cite-style-btn:not(:last-child) {
-  border-right: 1px solid var(--border);
-}
-
-.cite-style-btn:hover {
-  background: var(--bg-dark);
-}
-
-.cite-style-btn.active {
-  background: var(--accent);
-  color: #fff;
-}
 
 /* ── Modal ── */
 .modal-overlay {
@@ -753,12 +723,15 @@ body {
 }
 
 /* ── Citations in Preview ── */
-.citation {
+/* a.citation beats Tufte CSS's a:link which styles links via background-image gradients */
+a.citation {
   text-decoration: none;
   color: inherit;
+  background: none;
+  text-shadow: none;
 }
 
-.citation:hover {
+a.citation:hover {
   text-decoration: underline;
 }
 
@@ -772,6 +745,7 @@ body {
   border-top: 1px solid #ccc;
   margin-top: 3rem;
   padding-top: 1.5rem;
+  width: 55%;
 }
 
 .references h2 {
@@ -786,10 +760,22 @@ body {
 .references-list li {
   margin-bottom: 0.75em;
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .references-list a {
   word-break: break-all;
+  background: none;
+  text-shadow: none;
+  text-decoration: underline;
+}
+
+/* ── Display Math ── */
+.math-display {
+  width: 55%;
+  margin: 1.5em 0;
+  overflow-x: auto;
+  text-align: center;
 }
 
 /* ── Size Bracket Tooltip ── */

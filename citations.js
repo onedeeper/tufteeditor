@@ -25,6 +25,9 @@ const Citations = (function () {
 
   const BIB_STORAGE_KEY = 'tufte-bibliography';
   const STYLE_STORAGE_KEY = 'tufte-citation-style';
+  const URL_STORE_KEY = 'tufte-url-citations';
+
+  let _urlStore = []; // persistent list of { url, name } for autocomplete
 
   // Restore from localStorage on load
   try {
@@ -37,6 +40,8 @@ const Citations = (function () {
     if (savedStyle === 'numbered' || savedStyle === 'apa') {
       _citationStyle = savedStyle;
     }
+    const savedUrls = localStorage.getItem(URL_STORE_KEY);
+    if (savedUrls) _urlStore = JSON.parse(savedUrls);
   } catch (e) {
     // ignore parse errors
   }
@@ -241,6 +246,16 @@ const Citations = (function () {
     return `<a class="citation" href="#ref-${number}"${title}>${label}</a>`;
   }
 
+  function trackCitation(key) {
+    if (_citedKeySet.has(key)) {
+      return _citedKeys.indexOf(key) + 1;
+    }
+    _citeCounter++;
+    _citedKeys.push(key);
+    _citedKeySet.add(key);
+    return _citeCounter;
+  }
+
   function formatInlineCitation(key) {
     const lowerKey = key.toLowerCase();
     const entry = _bibliography.get(lowerKey);
@@ -249,16 +264,7 @@ const Citations = (function () {
       return `<span class="citation-error">[@${escapeHtml(key)}]</span>`;
     }
 
-    let number;
-    if (_citedKeySet.has(lowerKey)) {
-      number = _citedKeys.indexOf(lowerKey) + 1;
-    } else {
-      _citeCounter++;
-      number = _citeCounter;
-      _citedKeys.push(lowerKey);
-      _citedKeySet.add(lowerKey);
-    }
-
+    const number = trackCitation(lowerKey);
     const refText = formatReferenceText(entry);
     if (_citationStyle === 'apa') {
       const lastName = getLastName(entry.author);
@@ -269,27 +275,21 @@ const Citations = (function () {
     return citationLink(number, `[${number}]`, refText);
   }
 
-  function formatInlineUrlCitation(url) {
+  function formatInlineUrlCitation(url, name) {
     let domain;
     try { domain = new URL(url).hostname; } catch (e) { domain = url; }
+    const displayName = name || domain;
 
-    // Check if already cited
-    const existing = _urlCitations.find(u => u.url === url);
-    if (existing) {
-      const number = _citedKeys.indexOf('__url__' + url) + 1;
-      if (_citationStyle === 'apa') return citationLink(number, `(${escapeHtml(domain)})`);
-      return citationLink(number, `[${number}]`);
-    }
+    addToUrlStore(url, name);
 
-    _citeCounter++;
-    const number = _citeCounter;
     const urlKey = '__url__' + url;
-    _citedKeys.push(urlKey);
-    _citedKeySet.add(urlKey);
-    _urlCitations.push({ url, number });
+    const existing = _urlCitations.find(u => u.url === url);
+    if (existing && name) existing.name = name;
+    const number = trackCitation(urlKey);
+    if (!existing) _urlCitations.push({ url, name: name || '', number });
 
-    if (_citationStyle === 'apa') return citationLink(number, `(${escapeHtml(domain)})`);
-    return citationLink(number, `[${number}]`);
+    if (_citationStyle === 'apa') return citationLink(number, `(${escapeHtml(displayName)})`, name || url);
+    return citationLink(number, `[${number}]`, name || url);
   }
 
   function renderReferencesSection() {
@@ -303,7 +303,13 @@ const Citations = (function () {
 
       if (key.startsWith('__url__')) {
         const url = key.substring(7);
-        html += `<li id="ref-${num}"><a href="${escapeAttr(url)}">${escapeHtml(url)}</a></li>`;
+        const urlEntry = _urlCitations.find(u => u.url === url);
+        const urlName = urlEntry ? urlEntry.name : '';
+        if (urlName) {
+          html += `<li id="ref-${num}">${escapeHtml(urlName)}. <a href="${escapeAttr(url)}">${escapeHtml(url)}</a></li>`;
+        } else {
+          html += `<li id="ref-${num}"><a href="${escapeAttr(url)}">${escapeHtml(url)}</a></li>`;
+        }
       } else {
         const entry = _bibliography.get(key);
         if (entry) {
@@ -413,20 +419,42 @@ const Citations = (function () {
     return authors.slice(0, -1).join(', ') + ', & ' + authors[authors.length - 1];
   }
 
+  /* ── URL Store (for autocomplete) ── */
+
+  function addToUrlStore(url, name) {
+    const idx = _urlStore.findIndex(u => u.url === url);
+    if (idx !== -1) {
+      if (name) _urlStore[idx].name = name;
+      return;
+    }
+    _urlStore.push({ url, name: name || '' });
+    if (_urlStore.length > 50) _urlStore.shift();
+    try {
+      localStorage.setItem(URL_STORE_KEY, JSON.stringify(_urlStore));
+    } catch (e) {}
+  }
+
+  function searchUrlStore(query) {
+    const q = query ? query.toLowerCase() : '';
+    return _urlStore.filter(u =>
+      !q || u.url.toLowerCase().includes(q) || (u.name && u.name.toLowerCase().includes(q))
+    ).slice(0, 8);
+  }
+
   /* ── Helpers ── */
 
   // escapeHtml and escapeAttr are globals from parser.js (loaded first)
 
   function getCitationCSS() {
     return `
-.citation { text-decoration: none; color: inherit; }
-.citation:hover { text-decoration: underline; }
+a.citation { text-decoration: none; color: inherit; background: none; text-shadow: none; }
+a.citation:hover { text-decoration: underline; }
 .citation-error { color: #c00; border-bottom: 1px dashed #c00; }
-.references { clear: both; border-top: 1px solid #ccc; margin-top: 3rem; padding-top: 1.5rem; }
+.references { clear: both; border-top: 1px solid #ccc; margin-top: 3rem; padding-top: 1.5rem; width: 55%; }
 .references h2 { font-size: 1.4rem; margin-bottom: 1rem; }
 .references-list { padding-left: 1.5em; }
-.references-list li { margin-bottom: 0.75em; line-height: 1.5; }
-.references-list a { word-break: break-all; }`;
+.references-list li { margin-bottom: 0.75em; line-height: 1.5; overflow-wrap: anywhere; }
+.references-list a { word-break: break-all; background: none; text-shadow: none; text-decoration: underline; }`;
   }
 
   function getBibliographyCount() {
@@ -471,6 +499,7 @@ const Citations = (function () {
     getCitationCSS,
     getBibliographyCount,
     clearBibliography,
-    searchEntries
+    searchEntries,
+    searchUrlStore
   };
 })();

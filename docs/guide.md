@@ -62,6 +62,7 @@ function greet(name) {
 
 ## Exporting
 
+
 Click **Export** in the top bar:
 
 - **Download HTML** — Standalone `.html` with Tufte CSS. Uploaded images are inlined automatically.

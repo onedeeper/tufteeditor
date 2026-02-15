@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tufte Editor</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tufte-css/1.8.0/tufte.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js" data-manual></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -17,14 +22,14 @@
         <span class="word-count">0 words</span>
       </div>
       <div class="topbar-right">
-        <div class="view-toggles">
-          <button class="view-btn" data-view="edit" title="Editor only">Edit</button>
-          <button class="view-btn active" data-view="split" title="Split view">Split</button>
-          <button class="view-btn" data-view="preview" title="Preview only">Preview</button>
+        <div class="view-toggles toggle-group">
+          <button class="view-btn toggle-btn" data-view="edit" title="Editor only">Edit</button>
+          <button class="view-btn toggle-btn active" data-view="split" title="Split view">Split</button>
+          <button class="view-btn toggle-btn" data-view="preview" title="Preview only">Preview</button>
         </div>
-        <div class="cite-style-toggle">
-          <button class="cite-style-btn active" data-cite-style="numbered" title="Numbered citations">[1]</button>
-          <button class="cite-style-btn" data-cite-style="apa" title="APA citations">APA</button>
+        <div class="cite-style-toggle toggle-group">
+          <button class="cite-style-btn toggle-btn active" data-cite-style="numbered" title="Numbered citations">[1]</button>
+          <button class="cite-style-btn toggle-btn" data-cite-style="apa" title="APA citations">APA</button>
         </div>
         <div class="export-dropdown">
           <button class="export-btn">Export &#9662;</button>
@@ -126,6 +131,7 @@
   <script src="parser.js"></script>
   <script src="citations.js"></script>
   <script src="images.js"></script>
+  <script src="latex-completions.js"></script>
   <script src="documents.js"></script>
   <script src="editor.js"></script>
 </body>
