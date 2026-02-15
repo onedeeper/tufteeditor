@@ -4,6 +4,8 @@ A distraction-free Markdown editor with live preview, styled with [Edward Tufte'
 
 Documents are plain `.md` files on disk. Images are regular files. No build step, no dependencies, no accounts — just `node server.js` and write.
 
+Note: This project was built entirely through conversation with Claude (Anthropic). I designed the concept, workflow, and feature set; Claude wrote all the code. I am not a JavaScript developer. Use accordingly — contributions and code review welcome
+
 ## Quick start
 
 ```
