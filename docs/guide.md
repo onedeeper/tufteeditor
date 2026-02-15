@@ -23,11 +23,9 @@ Write a blockquote with an attribution line starting with `—` or `--`:
 
 ## Images
 
-![Mona Lisa, Leonardo da Vinci][40](https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/300px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg)
+![Mona Lisa, Leonardo da Vinci][80](https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/300px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg){margin}
 
 Add `{fullwidth}` after the URL for a full-width figure, or `{margin}` for a margin figure.
-
-![Mona Lisa, Leonardo da Vinci][100](https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/300px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg){fullwidth}
 
 Click the **Images** button in the toolbar to upload images from your computer. Once uploaded, reference them by filename. Autocomplete will suggest filenames as you type after `@`.
 

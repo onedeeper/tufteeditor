@@ -418,6 +418,23 @@ body {
   counter-reset: sidenote-counter;
 }
 
+/* Fix Tufte CSS link shadow: its text-shadow assumes a pure white background,
+   but the preview uses #fffff8, so the white shadow halos become visible. */
+.preview-content a {
+  text-shadow:
+    0.03em 0 #fffff8, -0.03em 0 #fffff8,
+    0 0.03em #fffff8, 0 -0.03em #fffff8;
+}
+
+.preview-content figure {
+  text-align: center;
+}
+
+.preview-content figcaption {
+  margin-top: 0.4em;
+  font-size: 0.875rem;
+}
+
 /* Contain floated margin figures/notes so sections expand to fit them */
 .preview-content section {
   display: flow-root;

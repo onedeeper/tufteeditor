@@ -2,6 +2,8 @@
 
 A distraction-free Markdown editor with live preview, styled with [Edward Tufte's CSS](https://edwardtufte.github.io/tufte-css/). Get to writing fast, with simple, clean typography.
 
+![Tufte Editor](tufte.png)
+
 Documents are plain `.md` files on disk. Images are regular files. No build step, no dependencies, no accounts — just `node server.js` and write.
 
 🤖 Full disclosure: This project was built entirely through conversation with Claude (Anthropic). I designed the concept, workflow, and feature set; Claude wrote all the code. I am not a JavaScript developer. The code has not been independently audited. Contributions, code review, and bug reports are very welcome!
@@ -26,6 +28,8 @@ Open [http://localhost:3000](http://localhost:3000). Two starter documents are i
 - BibTeX citations with autocomplete and numbered/APA styles
 - Double-click anywhere in the preview to jump to that spot in the editor
 - Keyboard shortcuts for bold, italic, undo/redo, and save
+- Latex support
+- Code blocks with syntax highlighting
 
 **Documents**
 - Multi-document sidebar with create, rename, and delete
