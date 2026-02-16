@@ -24,7 +24,7 @@ Open [http://localhost:3000](http://localhost:3000). Two starter documents are i
 **Writing**
 - Split-pane editor with live Tufte-styled preview
 - Sidenotes, margin notes, epigraphs, and new-thought markers
-- Image uploads with drag-and-drop management
+- Image uploads 
 - BibTeX citations with autocomplete and numbered/APA styles
 - Double-click anywhere in the preview to jump to that spot in the editor
 - Keyboard shortcuts for bold, italic, undo/redo, and save
