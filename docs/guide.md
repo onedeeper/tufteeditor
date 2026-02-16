@@ -37,6 +37,7 @@ Cite URLs directly with `@url[https://example.com]`. A references section is gen
 
 ## Standard Markdown
 
+ 
 All the usual formatting works: **bold**, *italic*, `inline code`, [hyperlinks](https://edwardtufte.github.io/tufte-css/), headings with `#`, lists with `-` or `1.`, blockquotes with `>`, and horizontal rules with `---`.
 
 ```javascript
@@ -44,6 +45,7 @@ function greet(name) {
   return `Hello, ${name}!`;
 }
 ```
+
 
 - First item
 - Second item with **bold**

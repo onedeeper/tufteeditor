@@ -5,6 +5,7 @@
 
 (async function () {
   await ImageStore.init();
+  await Citations.init();
 
   const editor    = document.getElementById('editor');
   const preview   = document.querySelector('#preview article');

@@ -13,7 +13,7 @@
  */
 
 const Citations = (function () {
-  // Persistent state (saved to localStorage)
+  // Persistent state (bibliography saved to library.bib via server)
   let _bibliography = new Map();   // key → BibEntry
   let _citationStyle = 'numbered'; // 'numbered' | 'apa'
 
@@ -23,19 +23,13 @@ const Citations = (function () {
   let _citeCounter = 0;
   let _urlCitations = [];    // { url, number }
 
-  const BIB_STORAGE_KEY = 'tufte-bibliography';
   const STYLE_STORAGE_KEY = 'tufte-citation-style';
   const URL_STORE_KEY = 'tufte-url-citations';
 
   let _urlStore = []; // persistent list of { url, name } for autocomplete
 
-  // Restore from localStorage on load
+  // Restore style and URL store from localStorage (lightweight prefs)
   try {
-    const savedBib = localStorage.getItem(BIB_STORAGE_KEY);
-    if (savedBib) {
-      const entries = JSON.parse(savedBib);
-      _bibliography = new Map(entries);
-    }
     const savedStyle = localStorage.getItem(STYLE_STORAGE_KEY);
     if (savedStyle === 'numbered' || savedStyle === 'apa') {
       _citationStyle = savedStyle;
@@ -45,6 +39,9 @@ const Citations = (function () {
   } catch (e) {
     // ignore parse errors
   }
+
+  // Clean up old localStorage bibliography (migrated to file-based)
+  try { localStorage.removeItem('tufte-bibliography'); } catch (e) {}
 
   /* ── BibTeX Parser (state-machine approach) ── */
 
@@ -206,7 +203,46 @@ const Citations = (function () {
     return parts[parts.length - 1];
   }
 
+  /* ── Serialize back to BibTeX ── */
+
+  function serializeBibTeX() {
+    const lines = [];
+    for (const [, entry] of _bibliography) {
+      const type = entry.type || 'misc';
+      const key = entry.key;
+      const fields = [];
+      for (const [k, v] of Object.entries(entry)) {
+        if (k === 'type' || k === 'key') continue;
+        fields.push(`  ${k} = {${v}}`);
+      }
+      lines.push(`@${type}{${key},\n${fields.join(',\n')}\n}`);
+    }
+    return lines.join('\n\n') + '\n';
+  }
+
+  function saveBibToServer() {
+    const body = _bibliography.size > 0 ? serializeBibTeX() : '';
+    const method = _bibliography.size > 0 ? 'PUT' : 'DELETE';
+    fetch('/api/bibliography', { method, body: method === 'PUT' ? body : undefined })
+      .catch(() => {});
+  }
+
   /* ── Public API ── */
+
+  async function init() {
+    try {
+      const res = await fetch('/api/bibliography');
+      const text = await res.text();
+      if (text.trim()) {
+        const parsed = parseBibTeX(text);
+        for (const [key, entry] of parsed) {
+          _bibliography.set(key, entry);
+        }
+      }
+    } catch (e) {
+      // server unavailable, start with empty bibliography
+    }
+  }
 
   function loadBibliography(bibText) {
     const parsed = parseBibTeX(bibText);
@@ -214,12 +250,8 @@ const Citations = (function () {
     for (const [key, entry] of parsed) {
       _bibliography.set(key, entry);
     }
-    // Persist
-    try {
-      localStorage.setItem(BIB_STORAGE_KEY, JSON.stringify([..._bibliography]));
-    } catch (e) {
-      // storage full, ignore
-    }
+    // Persist to library.bib
+    saveBibToServer();
     return parsed.size;
   }
 
@@ -463,7 +495,7 @@ a.citation:hover { text-decoration: underline; }
 
   function clearBibliography() {
     _bibliography.clear();
-    localStorage.removeItem(BIB_STORAGE_KEY);
+    saveBibToServer();
   }
 
   function searchEntries(query) {
@@ -489,6 +521,7 @@ a.citation:hover { text-decoration: underline; }
   }
 
   return {
+    init,
     loadBibliography,
     setCitationStyle,
     getCitationStyle,

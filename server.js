@@ -11,6 +11,7 @@ const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
 const DOCS_DIR = path.join(ROOT, 'docs');
 const UPLOADS_DIR = path.join(ROOT, 'uploads');
+const BIB_FILE = path.join(ROOT, 'library.bib');
 
 // Auto-create directories
 fs.mkdirSync(DOCS_DIR, { recursive: true });
@@ -161,6 +162,31 @@ function handleUploadsAPI(req, res, urlPath) {
   sendJSON(res, 405, { error: 'Method not allowed' });
 }
 
+function handleBibliographyAPI(req, res) {
+  // GET /api/bibliography — read library.bib
+  if (req.method === 'GET') {
+    if (!fs.existsSync(BIB_FILE)) return sendText(res, 200, '');
+    const content = fs.readFileSync(BIB_FILE, 'utf-8');
+    return sendText(res, 200, content);
+  }
+
+  // PUT /api/bibliography — write library.bib
+  if (req.method === 'PUT') {
+    return readBody(req).then(body => {
+      fs.writeFileSync(BIB_FILE, body.toString('utf-8'));
+      sendJSON(res, 200, { ok: true });
+    }).catch(err => sendJSON(res, 400, { error: err.message }));
+  }
+
+  // DELETE /api/bibliography — remove library.bib
+  if (req.method === 'DELETE') {
+    if (fs.existsSync(BIB_FILE)) fs.unlinkSync(BIB_FILE);
+    return sendJSON(res, 200, { ok: true });
+  }
+
+  sendJSON(res, 405, { error: 'Method not allowed' });
+}
+
 // --- Static file serving ---
 
 function serveStatic(req, res, urlPath) {
@@ -208,6 +234,9 @@ const server = http.createServer((req, res) => {
   }
   if (urlPath.startsWith('/api/uploads')) {
     return handleUploadsAPI(req, res, urlPath);
+  }
+  if (urlPath === '/api/bibliography') {
+    return handleBibliographyAPI(req, res);
   }
   serveStatic(req, res, urlPath);
 });
