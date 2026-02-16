@@ -83,3 +83,7 @@ node test.js
 ## Requirements
 
 Node.js 18 or later. No `npm install` needed.
+
+## License
+
+[CC BY-NC 4.0](LICENSE) — Free to use, share, and adapt for non-commercial purposes.
