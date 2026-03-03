@@ -276,12 +276,13 @@ function generateFullHTML(bodyHTML, title) {
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tufte-css/1.8.0/tufte.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
-<style>body { padding: 2rem 0; } section { display: flow-root; } pre { width: 55%; overflow-x: auto; } figure { text-align: center; } figcaption { margin-top: 0.4em; font-size: 0.875rem; }${Citations.getCitationCSS()}</style>
+<style>body { padding: 2rem 0; } section { display: flow-root; } pre { width: 55%; overflow-x: auto; } figure { text-align: center; } figcaption { margin-top: 0.4em; font-size: 0.875rem; } article img { cursor: zoom-in; } .lightbox-overlay { position:fixed; inset:0; background:rgba(0,0,0,.9); display:flex; align-items:center; justify-content:center; z-index:500; cursor:zoom-out; } .lightbox-img { max-width:90vw; max-height:90vh; object-fit:contain; user-select:none; -webkit-user-select:none; }${Citations.getCitationCSS()}</style>
 </head>
 <body>
 <article>
 ${bodyHTML}
 </article>
+<script>(function(){var lb=document.createElement('div');lb.className='lightbox-overlay';lb.style.display='none';var im=document.createElement('img');im.className='lightbox-img';lb.appendChild(im);document.body.appendChild(lb);var s=1,tx=0,ty=0,dr=false,dd=false,x0,y0,tx0,ty0;function u(){im.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')';}document.querySelector('article').addEventListener('click',function(e){if(e.target.tagName==='IMG'){s=1;tx=0;ty=0;im.style.transform='';im.src=e.target.src;lb.style.display='flex';}});lb.addEventListener('click',function(){if(!dd)lb.style.display='none';});lb.addEventListener('wheel',function(e){e.preventDefault();s=Math.max(.5,Math.min(10,s*(e.deltaY>0?.9:1.1)));u();},{passive:false});im.addEventListener('mousedown',function(e){e.preventDefault();dr=true;dd=false;x0=e.clientX;y0=e.clientY;tx0=tx;ty0=ty;});document.addEventListener('mousemove',function(e){if(!dr)return;if(Math.abs(e.clientX-x0)>3||Math.abs(e.clientY-y0)>3)dd=true;tx=tx0+(e.clientX-x0);ty=ty0+(e.clientY-y0);u();});document.addEventListener('mouseup',function(){dr=false;});document.addEventListener('keydown',function(e){if(e.key==='Escape')lb.style.display='none';});})()</script>
 </body>
 </html>`;
 }

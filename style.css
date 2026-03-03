@@ -814,10 +814,34 @@ a.citation:hover {
   white-space: nowrap;
 }
 
+/* ── Image Lightbox ── */
+.preview-content img {
+  cursor: zoom-in;
+}
+
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  cursor: zoom-out;
+}
+
+.lightbox-img {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 /* ── Print ── */
 @media print {
   .topbar, .toolbar, .editor-pane, .divider, .sidebar,
-  .autocomplete-dropdown, .size-tooltip, .modal-overlay {
+  .autocomplete-dropdown, .size-tooltip, .modal-overlay, .lightbox-overlay {
     display: none !important;
   }
   .app {

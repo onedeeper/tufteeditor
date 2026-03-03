@@ -109,6 +109,70 @@
     editor.scrollTop = Math.max(0, targetLine * lineHeight - editor.clientHeight / 3);
   });
 
+  /* ── Image Lightbox ── */
+  const lightbox = document.createElement('div');
+  lightbox.className = 'lightbox-overlay';
+  lightbox.style.display = 'none';
+  const lbImg = document.createElement('img');
+  lbImg.className = 'lightbox-img';
+  lightbox.appendChild(lbImg);
+  document.body.appendChild(lightbox);
+
+  let lbScale, lbTX, lbTY;
+  let lbDragging = false, lbDidDrag = false;
+  let lbDragX0, lbDragY0, lbTX0, lbTY0;
+
+  function openLightbox(src) {
+    lbScale = 1; lbTX = 0; lbTY = 0;
+    lbImg.style.transform = '';
+    lbImg.src = src;
+    lightbox.style.display = 'flex';
+  }
+
+  function closeLightbox() {
+    lightbox.style.display = 'none';
+  }
+
+  function lbTransform() {
+    lbImg.style.transform = `translate(${lbTX}px, ${lbTY}px) scale(${lbScale})`;
+  }
+
+  preview.addEventListener('click', (e) => {
+    if (e.target.tagName === 'IMG') openLightbox(e.target.src);
+  });
+
+  lightbox.addEventListener('click', () => {
+    if (!lbDidDrag) closeLightbox();
+  });
+
+  lightbox.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    lbScale = Math.max(0.5, Math.min(10, lbScale * (e.deltaY > 0 ? 0.9 : 1.1)));
+    lbTransform();
+  }, { passive: false });
+
+  lbImg.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    lbDragging = true;
+    lbDidDrag = false;
+    lbDragX0 = e.clientX; lbDragY0 = e.clientY;
+    lbTX0 = lbTX; lbTY0 = lbTY;
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!lbDragging) return;
+    if (Math.abs(e.clientX - lbDragX0) > 3 || Math.abs(e.clientY - lbDragY0) > 3) lbDidDrag = true;
+    lbTX = lbTX0 + (e.clientX - lbDragX0);
+    lbTY = lbTY0 + (e.clientY - lbDragY0);
+    lbTransform();
+  });
+
+  document.addEventListener('mouseup', () => { lbDragging = false; });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && lightbox.style.display !== 'none') closeLightbox();
+  });
+
   /* ── Undo / Redo ── */
   const history = {
     states: [],
