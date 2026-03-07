@@ -35,6 +35,25 @@ Click **Bib** in the toolbar to load BibTeX entries, then cite inline with `@cit
 
 Cite URLs directly with `@url[https://example.com]`. A references section is generated automatically at the bottom of the document. Toggle between **[1]** numbered and **APA** styles in the top bar.
 
+## Tables
+
+Click the **Table** button in the toolbar to open a grid picker — hover to select the size (up to 8×8) and click to insert a GFM-style pipe table.
+
+| Item   | Qty | Price |
+| ------ | --- | ----- |
+| Apples | 4   | $1.20 |
+| Bread  | 1   | $3.50 |
+
+Right-click inside any table in the editor to open the context menu, which lets you:
+
+- **Add row above / below** — insert a new row relative to the cursor
+- **Add column left / right** — insert a new column relative to the cursor
+- **Delete row** — remove the current row (disabled if only one data row remains)
+- **Delete column** — remove the current column (disabled if only one column remains)
+- **Delete table** — remove the entire table
+
+Tables support column alignment using colons in the separator row: `:---` for left, `:---:` for center, and `---:` for right. Inline formatting like **bold**, *italic*, and `code` works inside cells.
+
 ## Standard Markdown
 
  
