@@ -927,6 +927,286 @@
   });
   editor.addEventListener('blur', () => { sizeTooltip.style.display = 'none'; });
 
+  /* ── Table Grid Picker ── */
+  const tableBtn = document.getElementById('table-btn');
+  const gridPicker = document.getElementById('table-grid-picker');
+  const gridContainer = document.getElementById('grid-picker-grid');
+  const gridLabel = gridPicker.querySelector('.grid-picker-label');
+
+  // Build 8×8 grid cells
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'grid-cell';
+      cell.dataset.row = r;
+      cell.dataset.col = c;
+      gridContainer.appendChild(cell);
+    }
+  }
+
+  const gridCells = gridContainer.querySelectorAll('.grid-cell');
+
+  function highlightGrid(row, col) {
+    gridCells.forEach(cell => {
+      const r = parseInt(cell.dataset.row);
+      const c = parseInt(cell.dataset.col);
+      cell.classList.toggle('highlight', r <= row && c <= col);
+    });
+    gridLabel.textContent = (col + 1) + ' \u00d7 ' + (row + 1);
+  }
+
+  gridContainer.addEventListener('mouseover', (e) => {
+    const cell = e.target.closest('.grid-cell');
+    if (!cell) return;
+    highlightGrid(parseInt(cell.dataset.row), parseInt(cell.dataset.col));
+  });
+
+  gridContainer.addEventListener('click', (e) => {
+    const cell = e.target.closest('.grid-cell');
+    if (!cell) return;
+    const rows = parseInt(cell.dataset.row) + 1;
+    const cols = parseInt(cell.dataset.col) + 1;
+    insertTable(rows, cols);
+    closeGridPicker();
+  });
+
+  tableBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (gridPicker.classList.contains('open')) {
+      closeGridPicker();
+      return;
+    }
+    const rect = tableBtn.getBoundingClientRect();
+    gridPicker.style.top = (rect.bottom + 4) + 'px';
+    gridPicker.style.left = rect.left + 'px';
+    gridLabel.textContent = 'Insert Table';
+    gridCells.forEach(c => c.classList.remove('highlight'));
+    gridPicker.classList.add('open');
+  });
+
+  function closeGridPicker() {
+    gridPicker.classList.remove('open');
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!gridPicker.contains(e.target) && e.target !== tableBtn) closeGridPicker();
+  });
+
+  document.addEventListener('scroll', closeGridPicker, true);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && gridPicker.classList.contains('open')) closeGridPicker();
+  });
+
+  function insertTable(rows, cols) {
+    history.save();
+    editor.focus();
+    const start = editor.selectionStart;
+
+    let prefix = '';
+    if (start > 0 && editor.value[start - 1] !== '\n') prefix = '\n';
+
+    // Header row
+    let table = prefix + '|';
+    for (let c = 0; c < cols; c++) table += ' Header ' + (c + 1) + ' |';
+    table += '\n';
+
+    // Separator row
+    table += '|';
+    for (let c = 0; c < cols; c++) table += ' --- |';
+    table += '\n';
+
+    // Data rows (rows = count of data rows; header is always added above)
+    for (let r = 0; r < rows; r++) {
+      table += '|';
+      for (let c = 0; c < cols; c++) table += '  |';
+      table += '\n';
+    }
+
+    editor.setRangeText(table, start, editor.selectionEnd, 'end');
+    editor.dispatchEvent(new Event('input'));
+  }
+
+  /* ── Table Context Detection ── */
+  function getTableContext() {
+    const pos = editor.selectionStart;
+    const text = editor.value;
+    const allLines = text.split('\n');
+
+    // Find which line the cursor is on
+    let charCount = 0;
+    let cursorLine = 0;
+    for (let i = 0; i < allLines.length; i++) {
+      if (charCount + allLines[i].length >= pos) {
+        cursorLine = i;
+        break;
+      }
+      charCount += allLines[i].length + 1; // +1 for \n
+    }
+
+    // Check if current line is in a table (starts with |)
+    if (!/^\|/.test(allLines[cursorLine].trim())) return null;
+
+    // Expand upward to find table start
+    let tableStartLine = cursorLine;
+    while (tableStartLine > 0 && /^\|/.test(allLines[tableStartLine - 1].trim())) {
+      tableStartLine--;
+    }
+
+    // Expand downward to find table end
+    let tableEndLine = cursorLine;
+    while (tableEndLine < allLines.length - 1 && /^\|/.test(allLines[tableEndLine + 1].trim())) {
+      tableEndLine++;
+    }
+
+    // Validate: need at least 2 lines and second line must be separator
+    const tableLines = allLines.slice(tableStartLine, tableEndLine + 1);
+    if (tableLines.length < 2) return null;
+    if (!/^\|[\s\-:|]+\|$/.test(tableLines[1].trim())) return null;
+
+    // Compute char offsets for the table block
+    let tableCharStart = 0;
+    for (let i = 0; i < tableStartLine; i++) tableCharStart += allLines[i].length + 1;
+    let tableCharEnd = tableCharStart;
+    for (let i = tableStartLine; i <= tableEndLine; i++) tableCharEnd += allLines[i].length + 1;
+
+    // Row index relative to the table
+    const tableRowIdx = cursorLine - tableStartLine;
+
+    // Column index: count | characters before cursor in the current line
+    const lineStart = charCount; // already computed as start of cursorLine
+    const cursorCol = pos - lineStart;
+    const lineUpToCursor = allLines[cursorLine].substring(0, cursorCol);
+    const colIdx = (lineUpToCursor.match(/\|/g) || []).length - 1; // -1 because leading pipe
+
+    return {
+      tableStartLine,
+      tableEndLine,
+      tableCharStart,
+      tableCharEnd,
+      tableRowIdx,
+      colIdx: Math.max(0, colIdx),
+      lines: tableLines
+    };
+  }
+
+  /* ── Table Context Menu ── */
+  const contextMenu = document.getElementById('table-context-menu');
+
+  editor.addEventListener('contextmenu', (e) => {
+    const ctx = getTableContext();
+    if (!ctx) {
+      contextMenu.classList.remove('open');
+      return;
+    }
+
+    e.preventDefault();
+    contextMenu._tableCtx = ctx;
+
+    // Position context menu
+    contextMenu.style.top = e.clientY + 'px';
+    contextMenu.style.left = e.clientX + 'px';
+
+    // Enable/disable buttons based on context
+    const rowCount = ctx.lines.length - 2; // exclude header + separator
+    const colCount = parseTableRow(ctx.lines[0]).length;
+
+    const deleteRowBtn = contextMenu.querySelector('[data-action="delete-row"]');
+    const deleteColBtn = contextMenu.querySelector('[data-action="delete-col"]');
+
+    // Disable delete row on header (row 0), separator (row 1), or when only 1 data row
+    deleteRowBtn.disabled = ctx.tableRowIdx <= 1 || rowCount <= 1;
+    // Disable delete column when only 1 column
+    deleteColBtn.disabled = colCount <= 1;
+
+    contextMenu.classList.add('open');
+
+    // Ensure menu stays within viewport
+    const rect = contextMenu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+      contextMenu.style.left = (e.clientX - rect.width) + 'px';
+    }
+    if (rect.bottom > window.innerHeight) {
+      contextMenu.style.top = (e.clientY - rect.height) + 'px';
+    }
+  });
+
+  document.addEventListener('click', () => {
+    contextMenu.classList.remove('open');
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') contextMenu.classList.remove('open');
+  });
+
+  function rebuildTableText(rows) {
+    return rows.map(cells => '| ' + cells.join(' | ') + ' |').join('\n') + '\n';
+  }
+
+  contextMenu.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn || btn.disabled) return;
+    const action = btn.dataset.action;
+    const ctx = contextMenu._tableCtx;
+    if (!ctx) return;
+
+    contextMenu.classList.remove('open');
+    history.save();
+
+    // Parse all rows into arrays
+    const parsed = ctx.lines.map(line => parseTableRow(line));
+    const colCount = parsed[0].length;
+
+    switch (action) {
+      case 'add-row-above': {
+        const emptyRow = new Array(colCount).fill('');
+        const insertIdx = ctx.tableRowIdx < 2 ? 2 : ctx.tableRowIdx;
+        parsed.splice(insertIdx, 0, emptyRow);
+        break;
+      }
+      case 'add-row-below': {
+        const emptyRow = new Array(colCount).fill('');
+        const insertIdx = ctx.tableRowIdx < 2 ? 2 : ctx.tableRowIdx + 1;
+        parsed.splice(insertIdx, 0, emptyRow);
+        break;
+      }
+      case 'add-col-left': {
+        parsed.forEach((row, i) => {
+          if (i === 0) row.splice(ctx.colIdx, 0, 'Header');
+          else if (i === 1) row.splice(ctx.colIdx, 0, '---');
+          else row.splice(ctx.colIdx, 0, '');
+        });
+        break;
+      }
+      case 'add-col-right': {
+        const insertIdx = ctx.colIdx + 1;
+        parsed.forEach((row, i) => {
+          if (i === 0) row.splice(insertIdx, 0, 'Header');
+          else if (i === 1) row.splice(insertIdx, 0, '---');
+          else row.splice(insertIdx, 0, '');
+        });
+        break;
+      }
+      case 'delete-row': {
+        if (ctx.tableRowIdx >= 2) parsed.splice(ctx.tableRowIdx, 1);
+        break;
+      }
+      case 'delete-col': {
+        parsed.forEach(row => row.splice(ctx.colIdx, 1));
+        break;
+      }
+      case 'delete-table': {
+        editor.setRangeText('', ctx.tableCharStart, ctx.tableCharEnd, 'end');
+        editor.dispatchEvent(new Event('input'));
+        return;
+      }
+    }
+
+    const newText = rebuildTableText(parsed);
+    editor.setRangeText(newText, ctx.tableCharStart, ctx.tableCharEnd, 'end');
+    editor.dispatchEvent(new Event('input'));
+  });
+
   /* ── Sidebar ── */
   const sidebar = document.querySelector('.sidebar');
   const sidebarList = document.getElementById('sidebar-list');

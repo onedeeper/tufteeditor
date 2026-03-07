@@ -838,10 +838,140 @@ a.citation:hover {
   -webkit-user-select: none;
 }
 
+/* ── Table Preview ── */
+.preview-content .table-wrapper {
+  width: 55%;
+  margin: 1.5em 0;
+  overflow-x: auto;
+}
+
+.preview-content table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.preview-content th {
+  text-align: left;
+  padding: 0.5em 0.75em;
+  border-bottom: 2px solid #333;
+  font-weight: 600;
+}
+
+.preview-content td {
+  padding: 0.4em 0.75em;
+  border-bottom: 1px solid #ddd;
+}
+
+/* ── Grid Picker ── */
+.table-grid-picker {
+  display: none;
+  position: fixed;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 300;
+  padding: 10px;
+}
+
+.table-grid-picker.open {
+  display: block;
+}
+
+.grid-picker-label {
+  font-size: 12px;
+  color: #666;
+  text-align: center;
+  margin-bottom: 6px;
+  font-family: var(--font);
+}
+
+.grid-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 20px);
+  grid-template-rows: repeat(8, 20px);
+  gap: 2px;
+}
+
+.grid-cell {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.grid-cell.highlight {
+  background: #d0e4f7;
+  border-color: #6699cc;
+}
+
+/* ── Table Context Menu ── */
+.table-context-menu {
+  display: none;
+  position: fixed;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 400;
+  min-width: 180px;
+  padding: 4px 0;
+}
+
+.table-context-menu.open {
+  display: block;
+}
+
+.table-context-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--accent);
+  font-family: var(--font);
+}
+
+.table-context-menu button:hover {
+  background: var(--bg-dark);
+}
+
+.table-context-menu button:disabled {
+  color: #bbb;
+  cursor: default;
+}
+
+.table-context-menu button:disabled:hover {
+  background: none;
+}
+
+.context-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.context-menu-danger {
+  color: #c00 !important;
+}
+
+.context-menu-danger:hover {
+  background: #fff0f0 !important;
+}
+
 /* ── Print ── */
 @media print {
+  .table-wrapper {
+    width: 100% !important;
+  }
   .topbar, .toolbar, .editor-pane, .divider, .sidebar,
-  .autocomplete-dropdown, .size-tooltip, .modal-overlay, .lightbox-overlay {
+  .autocomplete-dropdown, .size-tooltip, .modal-overlay, .lightbox-overlay,
+  .table-grid-picker, .table-context-menu {
     display: none !important;
   }
   .app {

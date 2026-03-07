@@ -419,6 +419,76 @@ function testAutoNumbering() {
     'images in code blocks are counted (known trade-off)');
 }
 
+function testTableParser() {
+  console.log('\nTable parsing');
+
+  const { parseMarkdown } = loadParser();
+
+  // Basic table
+  const md = '| Name | Age |\n| --- | --- |\n| Alice | 30 |\n| Bob | 25 |';
+  const html = parseMarkdown(md);
+  assert(html.includes('<table>'), 'basic table produces <table>');
+  assert(html.includes('<thead>'), 'table has <thead>');
+  assert(html.includes('<tbody>'), 'table has <tbody>');
+  assert(html.includes('<th>Name</th>'), 'header cell rendered');
+  assert(html.includes('<td>Alice</td>'), 'data cell rendered');
+  assert(html.includes('<td>30</td>'), 'second column data rendered');
+  assert(html.includes('table-wrapper'), 'table wrapped in .table-wrapper');
+
+  // Table with alignment
+  const mdAlign = '| Left | Center | Right |\n| :--- | :---: | ---: |\n| a | b | c |';
+  const alignHtml = parseMarkdown(mdAlign);
+  assert(alignHtml.includes('text-align:center'), 'center alignment applied');
+  assert(alignHtml.includes('text-align:right'), 'right alignment applied');
+  assert(!alignHtml.includes('text-align:left'), 'left alignment is default (no explicit style)');
+
+  // Table with inline formatting in cells
+  const mdInline = '| **Bold** | *Italic* |\n| --- | --- |\n| `code` | [link](url) |';
+  const inlineHtml = parseMarkdown(mdInline);
+  assert(inlineHtml.includes('<strong>Bold</strong>'), 'bold in table cell');
+  assert(inlineHtml.includes('<em>Italic</em>'), 'italic in table cell');
+  assert(inlineHtml.includes('<code>code</code>'), 'code in table cell');
+
+  // Table gets data-line attribute
+  const mdWithContext = 'Some text\n\n| H |\n| --- |\n| D |';
+  const ctxHtml = parseMarkdown(mdWithContext);
+  assert(ctxHtml.includes('data-line="2"'), 'table has correct data-line');
+
+  // Non-table pipe text is not mistaken for a table
+  const mdNotTable = '| just a pipe at start';
+  const notTableHtml = parseMarkdown(mdNotTable);
+  assert(!notTableHtml.includes('<table>'), 'single pipe line is not a table');
+
+  // Table with empty cells
+  const mdEmpty = '| H1 | H2 |\n| --- | --- |\n|  |  |';
+  const emptyHtml = parseMarkdown(mdEmpty);
+  assert(emptyHtml.includes('<td></td>'), 'empty cells rendered');
+}
+
+function testTableExportCSS() {
+  console.log('\nTable export CSS');
+
+  const { parseMarkdown, generateFullHTML } = loadParser();
+
+  const body = parseMarkdown('| H |\n| --- |\n| D |');
+  const html = generateFullHTML(body, 'Test');
+  assert(html.includes('table-wrapper'), 'export CSS has table-wrapper rule');
+  assert(html.includes('border-collapse'), 'export CSS has border-collapse');
+  assert(html.includes('<table>'), 'exported body contains table');
+}
+
+function testTablePreviewCSS() {
+  console.log('\nTable preview CSS');
+
+  const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf-8');
+  assert(css.includes('.preview-content .table-wrapper'), 'style.css has table-wrapper rule');
+  assert(css.includes('.preview-content table'), 'style.css has table rule');
+  assert(css.includes('.preview-content th'), 'style.css has th rule');
+  assert(css.includes('.preview-content td'), 'style.css has td rule');
+  assert(css.includes('.table-grid-picker'), 'style.css has grid picker rule');
+  assert(css.includes('.table-context-menu'), 'style.css has context menu rule');
+}
+
 // --- Main ---
 
 (async () => {
@@ -438,6 +508,9 @@ function testAutoNumbering() {
     testExportFigureCSS();
     testPreviewCSS();
     testAutoNumbering();
+    testTableParser();
+    testTableExportCSS();
+    testTablePreviewCSS();
   } catch (err) {
     console.error('Fatal:', err);
     failed++;

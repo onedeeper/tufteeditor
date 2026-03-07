@@ -103,6 +103,53 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+/* ── Table Helpers ── */
+
+function parseTableRow(line) {
+  // Strip leading/trailing pipes and split on |
+  let trimmed = line.trim();
+  if (trimmed.startsWith('|')) trimmed = trimmed.substring(1);
+  if (trimmed.endsWith('|')) trimmed = trimmed.substring(0, trimmed.length - 1);
+  return trimmed.split('|').map(cell => cell.trim());
+}
+
+function parseTable(lines, dataLineAttr) {
+  const headerCells = parseTableRow(lines[0]);
+  const sepCells = parseTableRow(lines[1]);
+
+  // Determine alignment from separator row
+  const alignments = sepCells.map(cell => {
+    const left = cell.startsWith(':');
+    const right = cell.endsWith(':');
+    if (left && right) return 'center';
+    if (right) return 'right';
+    return 'left';
+  });
+
+  const alignAttr = (i) => {
+    const a = alignments[i] || 'left';
+    return a !== 'left' ? ` style="text-align:${a}"` : '';
+  };
+
+  let html = `<div class="table-wrapper"${dataLineAttr}><table>\n<thead><tr>`;
+  headerCells.forEach((cell, i) => {
+    html += `<th${alignAttr(i)}>${parseInline(cell)}</th>`;
+  });
+  html += '</tr></thead>\n<tbody>\n';
+
+  for (let r = 2; r < lines.length; r++) {
+    const cells = parseTableRow(lines[r]);
+    html += '<tr>';
+    headerCells.forEach((_, i) => {
+      html += `<td${alignAttr(i)}>${parseInline(cells[i] || '')}</td>`;
+    });
+    html += '</tr>\n';
+  }
+
+  html += '</tbody>\n</table></div>\n';
+  return html;
+}
+
 /* ── Block-level Pass ── */
 
 function parseMarkdown(src) {
@@ -253,6 +300,15 @@ function parseMarkdown(src) {
       continue;
     }
 
+    // Table (GFM pipe table)
+    const tableLines = block.split('\n');
+    if (tableLines.length >= 2 &&
+        /^\|/.test(tableLines[0].trim()) &&
+        /^\|[\s\-:|]+\|$/.test(tableLines[1].trim())) {
+      html += parseTable(tableLines, dl);
+      continue;
+    }
+
     // Paragraph (default)
     html += `<p${dl}>${parseInline(block.replace(/\n/g, ' '))}</p>\n`;
   }
@@ -276,7 +332,7 @@ function generateFullHTML(bodyHTML, title) {
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tufte-css/1.8.0/tufte.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
-<style>body { padding: 2rem 0; } section { display: flow-root; } pre { width: 55%; overflow-x: auto; } figure { text-align: center; } figcaption { margin-top: 0.4em; font-size: 0.875rem; } article img { cursor: zoom-in; } .lightbox-overlay { position:fixed; inset:0; background:rgba(0,0,0,.9); display:flex; align-items:center; justify-content:center; z-index:500; cursor:zoom-out; } .lightbox-img { max-width:90vw; max-height:90vh; object-fit:contain; user-select:none; -webkit-user-select:none; }${Citations.getCitationCSS()}</style>
+<style>body { padding: 2rem 0; } section { display: flow-root; } pre { width: 55%; overflow-x: auto; } figure { text-align: center; } figcaption { margin-top: 0.4em; font-size: 0.875rem; } article img { cursor: zoom-in; } .lightbox-overlay { position:fixed; inset:0; background:rgba(0,0,0,.9); display:flex; align-items:center; justify-content:center; z-index:500; cursor:zoom-out; } .lightbox-img { max-width:90vw; max-height:90vh; object-fit:contain; user-select:none; -webkit-user-select:none; } .table-wrapper { width:55%; margin:1.5em 0; overflow-x:auto; } table { border-collapse:collapse; width:100%; } th { text-align:left; padding:0.5em 0.75em; border-bottom:2px solid #333; font-weight:600; } td { padding:0.4em 0.75em; border-bottom:1px solid #ddd; } @media print { .table-wrapper { width:100%; } }${Citations.getCitationCSS()}</style>
 </head>
 <body>
 <article>

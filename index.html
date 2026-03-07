@@ -65,6 +65,7 @@
       <button data-insert="image" title="Image">Image</button>
       <button data-insert="heading" title="Heading">H2</button>
       <button data-insert="hr" title="Horizontal Rule">HR</button>
+      <button id="table-btn" title="Insert Table">Table</button>
       <span class="toolbar-sep"></span>
       <button data-insert="cite" title="Citation">Cite</button>
       <button data-insert="citeurl" title="URL Citation">Cite URL</button>
@@ -99,6 +100,25 @@
 
     <!-- Citation Autocomplete -->
     <div id="autocomplete" class="autocomplete-dropdown"></div>
+
+    <!-- Table Grid Picker -->
+    <div id="table-grid-picker" class="table-grid-picker">
+      <div class="grid-picker-label">Insert Table</div>
+      <div class="grid-picker-grid" id="grid-picker-grid"></div>
+    </div>
+
+    <!-- Table Context Menu -->
+    <div id="table-context-menu" class="table-context-menu">
+      <button data-action="add-row-above">Add row above</button>
+      <button data-action="add-row-below">Add row below</button>
+      <button data-action="add-col-left">Add column left</button>
+      <button data-action="add-col-right">Add column right</button>
+      <div class="context-menu-sep"></div>
+      <button data-action="delete-row">Delete row</button>
+      <button data-action="delete-col">Delete column</button>
+      <div class="context-menu-sep"></div>
+      <button data-action="delete-table" class="context-menu-danger">Delete table</button>
+    </div>
 
     <!-- Bibliography Modal -->
     <div id="bib-modal" class="modal-overlay" style="display:none;">
