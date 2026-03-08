@@ -6,12 +6,12 @@
  *  2. Inline: process inline formatting within each block
  */
 
-let _snCounter = 0;
-let _mnCounter = 0;
+let _sidenoteCounter = 0;
+let _marginnoteCounter = 0;
 
 function resetCounters() {
-  _snCounter = 0;
-  _mnCounter = 0;
+  _sidenoteCounter = 0;
+  _marginnoteCounter = 0;
 }
 
 /* ── Inline Pass ── */
@@ -39,12 +39,12 @@ function parseInline(text) {
 
   // Sidenotes: {sn:text}
   text = text.replace(/\{sn:([^}]+)\}/g, (_, content) => {
-    return marginToggleHTML('sn-' + (++_snCounter), '', 'sidenote', content);
+    return marginToggleHTML('sn-' + (++_sidenoteCounter), '', 'sidenote', content);
   });
 
   // Margin notes: {mn:text}
   text = text.replace(/\{mn:([^}]+)\}/g, (_, content) => {
-    return marginToggleHTML('mn-' + (++_mnCounter), '&#8853;', 'marginnote', content);
+    return marginToggleHTML('mn-' + (++_marginnoteCounter), '&#8853;', 'marginnote', content);
   });
 
   // New thought: {newthought:text}
@@ -66,7 +66,7 @@ function parseInline(text) {
     const imgTag = `<img src="${escapeAttr(url)}" alt="${escapeAttr(caption)}"${sizeStyle}/>`;
 
     if (modifier === 'margin') {
-      return marginToggleHTML('mn-fig-' + (++_mnCounter), '&#8853;', 'marginnote', imgTag + (caption ? '<br>' + caption : ''));
+      return marginToggleHTML('mn-fig-' + (++_marginnoteCounter), '&#8853;', 'marginnote', imgTag + (caption ? '<br>' + caption : ''));
     }
 
     if (modifier === 'fullwidth') {

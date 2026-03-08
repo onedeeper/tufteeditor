@@ -1,6 +1,23 @@
 /**
- * editor.js — App logic
- * Live preview, toolbar, view toggle, resizer, server-backed save, export
+ * editor.js — App logic for the Tufte Editor
+ *
+ * Sections:
+ *  1. Initialization
+ *  2. Live Preview & Auto-save
+ *  3. Double-click Preview -> Jump to Source
+ *  4. Image Lightbox (zoom/pan viewer)
+ *  5. Undo / Redo History
+ *  6. Document Loading & Title Rename
+ *  7. Toolbar Insertions
+ *  8. View Toggle & Split Pane Resizer
+ *  9. Export (HTML, Print, Copy Markdown)
+ * 10. Keyboard Shortcuts
+ * 11. Modals (Bibliography, Images)
+ * 12. Autocomplete (LaTeX, Citations, Images, URLs)
+ * 13. Size Bracket Tooltip
+ * 14. Table Grid Picker & Context Menu
+ * 15. Sidebar (Document List)
+ * 16. Citation Style Toggle
  */
 
 (async function () {
@@ -16,7 +33,8 @@
   const SAVE_DELAY    = 1000;
   const PREVIEW_DELAY = 150;
 
-  /* ── Restore / Init ── */
+  /* ── 1. Initialization ── */
+
   const initDoc = await Documents.init();
 
   editor.value = initDoc.content;
@@ -25,9 +43,12 @@
   updateWordCount();
   editor.focus();
 
-  /* ── Live Preview ── */
+  /* ── 2. Live Preview & Auto-save ── */
+
   let previewTimer;
   let undoTimer;
+  let saveTimer;
+
   editor.addEventListener('input', () => {
     clearTimeout(previewTimer);
     previewTimer = setTimeout(() => {
@@ -37,6 +58,13 @@
     scheduleSave();
     clearTimeout(undoTimer);
     undoTimer = setTimeout(() => history.save(), 400);
+    showAutocomplete();
+    checkSizeTooltip();
+  });
+
+  editor.addEventListener('click', () => {
+    showAutocomplete();
+    checkSizeTooltip();
   });
 
   function renderMathAndCode(el) {
@@ -54,27 +82,27 @@
   }
 
   function updatePreview() {
-    preview.innerHTML = parseMarkdown(editor.value);
-    // Resolve uploaded image sources
-    if (ImageStore.getCount() > 0) {
-      preview.querySelectorAll('img').forEach(img => {
-        const src = img.getAttribute('src');
-        const resolved = ImageStore.resolve(src);
-        if (resolved) img.src = resolved;
-      });
-    }
+    const html = parseMarkdown(editor.value);
+    preview.innerHTML = html;
+
+    // Resolve local image references
+    preview.querySelectorAll('img').forEach(img => {
+      const src = img.getAttribute('src');
+      const resolved = ImageStore.resolve(src);
+      if (resolved) img.src = resolved;
+    });
+
     renderMathAndCode(preview);
   }
 
   function updateWordCount() {
-    const text = editor.value
-      .replace(/\{(sn|mn|newthought):([^}]*)\}/g, '$2')
-      .replace(/[#*`\[\](){}!>-]/g, ' ');
+    const text = editor.value.replace(/[#*`\[\](){}>_~|\\$]/g, ' ').replace(/\s+/g, ' ').trim();
     const words = text.split(/\s+/).filter(w => w.length > 0);
     wordCount.textContent = words.length + ' word' + (words.length !== 1 ? 's' : '');
   }
 
-  /* ── Double-click Preview → Jump to Source ── */
+  /* ── 3. Double-click Preview -> Jump to Source ── */
+
   preview.addEventListener('dblclick', (e) => {
     // Walk up from click target to find nearest element with data-line
     let el = e.target;
@@ -87,12 +115,15 @@
     const targetLine = parseInt(el.dataset.line, 10);
     if (isNaN(targetLine)) return;
 
-    // Compute character offset of that line
+    e.preventDefault();
+
+    // Compute character offset of the target line
     const srcLines = editor.value.split('\n');
     let offset = 0;
     for (let i = 0; i < targetLine && i < srcLines.length; i++) {
       offset += srcLines[i].length + 1;
     }
+    const lineEnd = offset + (srcLines[targetLine] ? srcLines[targetLine].length : 0);
 
     // If in preview-only mode, switch to split
     if (app.classList.contains('view-preview')) {
@@ -101,79 +132,104 @@
       app.className = 'app view-split';
     }
 
-    editor.focus();
-    editor.setSelectionRange(offset, offset);
+    // Defer to run after the browser finishes processing the dblclick event,
+    // otherwise the browser's default word-selection overrides our setSelectionRange
+    setTimeout(() => {
+      editor.focus();
+      editor.setSelectionRange(offset, offset);
 
-    // Scroll editor to show the target line (centered roughly)
-    const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 22;
-    editor.scrollTop = Math.max(0, targetLine * lineHeight - editor.clientHeight / 3);
+      // Measure the cursor's visual position using the mirror-div technique,
+      // then scroll the editor to center the target line
+      const scrollBefore = editor.scrollTop;
+      const caretCoords = getCaretCoords();
+      const editorTop = editor.getBoundingClientRect().top;
+      const caretInContent = caretCoords.top - editorTop + scrollBefore;
+      editor.scrollTop = Math.max(0, caretInContent - editor.clientHeight / 3);
+
+      // Select the full line for visual highlighting
+      editor.setSelectionRange(offset, lineEnd);
+
+      // Clear highlight on next user interaction
+      function clearHighlight() {
+        editor.setSelectionRange(editor.selectionStart, editor.selectionStart);
+        editor.removeEventListener('keydown', clearHighlight);
+        editor.removeEventListener('mousedown', clearHighlight);
+      }
+      editor.addEventListener('keydown', clearHighlight, { once: true });
+      editor.addEventListener('mousedown', clearHighlight, { once: true });
+    }, 0);
   });
 
-  /* ── Image Lightbox ── */
-  const lightbox = document.createElement('div');
-  lightbox.className = 'lightbox-overlay';
-  lightbox.style.display = 'none';
-  const lbImg = document.createElement('img');
-  lbImg.className = 'lightbox-img';
-  lightbox.appendChild(lbImg);
-  document.body.appendChild(lightbox);
+  /* ── 4. Image Lightbox ── */
 
-  let lbScale, lbTX, lbTY;
-  let lbDragging = false, lbDidDrag = false;
-  let lbDragX0, lbDragY0, lbTX0, lbTY0;
+  const lightboxOverlay = document.createElement('div');
+  lightboxOverlay.className = 'lightbox-overlay';
+  lightboxOverlay.style.display = 'none';
+  const lightboxImg = document.createElement('img');
+  lightboxImg.className = 'lightbox-img';
+  lightboxOverlay.appendChild(lightboxImg);
+  document.body.appendChild(lightboxOverlay);
+
+  // Pan/zoom state
+  const lb = {
+    scale: 1, x: 0, y: 0,
+    dragging: false, didDrag: false,
+    dragStartX: 0, dragStartY: 0, startX: 0, startY: 0
+  };
 
   function openLightbox(src) {
-    lbScale = 1; lbTX = 0; lbTY = 0;
-    lbImg.style.transform = '';
-    lbImg.src = src;
-    lightbox.style.display = 'flex';
+    lb.scale = 1; lb.x = 0; lb.y = 0;
+    lightboxImg.style.transform = '';
+    lightboxImg.src = src;
+    lightboxOverlay.style.display = 'flex';
   }
 
   function closeLightbox() {
-    lightbox.style.display = 'none';
+    lightboxOverlay.style.display = 'none';
   }
 
-  function lbTransform() {
-    lbImg.style.transform = `translate(${lbTX}px, ${lbTY}px) scale(${lbScale})`;
+  function updateLightboxTransform() {
+    lightboxImg.style.transform = `translate(${lb.x}px, ${lb.y}px) scale(${lb.scale})`;
   }
 
   preview.addEventListener('click', (e) => {
     if (e.target.tagName === 'IMG') openLightbox(e.target.src);
   });
 
-  lightbox.addEventListener('click', () => {
-    if (!lbDidDrag) closeLightbox();
+  lightboxOverlay.addEventListener('click', () => {
+    if (!lb.didDrag) closeLightbox();
   });
 
-  lightbox.addEventListener('wheel', (e) => {
+  lightboxOverlay.addEventListener('wheel', (e) => {
     e.preventDefault();
-    lbScale = Math.max(0.5, Math.min(10, lbScale * (e.deltaY > 0 ? 0.9 : 1.1)));
-    lbTransform();
+    lb.scale = Math.max(0.5, Math.min(10, lb.scale * (e.deltaY > 0 ? 0.9 : 1.1)));
+    updateLightboxTransform();
   }, { passive: false });
 
-  lbImg.addEventListener('mousedown', (e) => {
+  lightboxImg.addEventListener('mousedown', (e) => {
     e.preventDefault();
-    lbDragging = true;
-    lbDidDrag = false;
-    lbDragX0 = e.clientX; lbDragY0 = e.clientY;
-    lbTX0 = lbTX; lbTY0 = lbTY;
+    lb.dragging = true;
+    lb.didDrag = false;
+    lb.dragStartX = e.clientX; lb.dragStartY = e.clientY;
+    lb.startX = lb.x; lb.startY = lb.y;
   });
 
   document.addEventListener('mousemove', (e) => {
-    if (!lbDragging) return;
-    if (Math.abs(e.clientX - lbDragX0) > 3 || Math.abs(e.clientY - lbDragY0) > 3) lbDidDrag = true;
-    lbTX = lbTX0 + (e.clientX - lbDragX0);
-    lbTY = lbTY0 + (e.clientY - lbDragY0);
-    lbTransform();
+    if (!lb.dragging) return;
+    if (Math.abs(e.clientX - lb.dragStartX) > 3 || Math.abs(e.clientY - lb.dragStartY) > 3) lb.didDrag = true;
+    lb.x = lb.startX + (e.clientX - lb.dragStartX);
+    lb.y = lb.startY + (e.clientY - lb.dragStartY);
+    updateLightboxTransform();
   });
 
-  document.addEventListener('mouseup', () => { lbDragging = false; });
+  document.addEventListener('mouseup', () => { lb.dragging = false; });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && lightbox.style.display !== 'none') closeLightbox();
+    if (e.key === 'Escape' && lightboxOverlay.style.display !== 'none') closeLightbox();
   });
 
-  /* ── Undo / Redo ── */
+  /* ── 5. Undo / Redo History ── */
+
   const history = {
     states: [],
     pointer: -1,
@@ -230,6 +286,8 @@
 
   history.save();
 
+  /* ── 6. Document Loading & Title Rename ── */
+
   function loadDocument(doc) {
     editor.value = doc.content;
     docTitle.textContent = doc.title;
@@ -241,8 +299,6 @@
   document.getElementById('undo-btn').addEventListener('click', () => history.undo());
   document.getElementById('redo-btn').addEventListener('click', () => history.redo());
 
-  /* ── Auto-save ── */
-  let saveTimer;
   function scheduleSave() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
@@ -251,7 +307,6 @@
     }, SAVE_DELAY);
   }
 
-  /* ── Title Rename (blur-based) ── */
   let titleBeforeEdit = '';
 
   docTitle.addEventListener('focus', () => {
@@ -277,7 +332,8 @@
     if (e.key === 'Enter') { e.preventDefault(); docTitle.blur(); }
   });
 
-  /* ── Toolbar Insertions ── */
+  /* ── 7. Toolbar Insertions ── */
+
   const snippets = {
     sidenote:   { before: '{sn:', after: '}', placeholder: 'sidenote text' },
     marginnote: { before: '{mn:', after: '}', placeholder: 'margin note text' },
@@ -335,7 +391,8 @@
     editor.dispatchEvent(new Event('input'));
   }
 
-  /* ── View Toggle ── */
+  /* ── 8. View Toggle & Split Pane Resizer ── */
+
   document.querySelector('.view-toggles').addEventListener('click', (e) => {
     const btn = e.target.closest('.view-btn');
     if (!btn) return;
@@ -345,24 +402,23 @@
     app.className = 'app view-' + view;
   });
 
-  /* ── Split Pane Resizer ── */
   const splitPane   = document.querySelector('.split-pane');
   const divider     = document.querySelector('.divider');
   const editorPane  = document.querySelector('.editor-pane');
   const previewPane = document.querySelector('.preview-pane');
 
-  let dragging = false;
+  let resizing = false;
 
   divider.addEventListener('mousedown', (e) => {
     e.preventDefault();
-    dragging = true;
+    resizing = true;
     divider.classList.add('dragging');
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   });
 
   document.addEventListener('mousemove', (e) => {
-    if (!dragging) return;
+    if (!resizing) return;
     const rect = splitPane.getBoundingClientRect();
     const vertical = window.innerWidth <= 640;
     const pct = vertical
@@ -374,14 +430,15 @@
   });
 
   document.addEventListener('mouseup', () => {
-    if (!dragging) return;
-    dragging = false;
+    if (!resizing) return;
+    resizing = false;
     divider.classList.remove('dragging');
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
   });
 
-  /* ── Export ── */
+  /* ── 9. Export ── */
+
   const exportBtn  = document.querySelector('.export-btn');
   const exportMenu = document.querySelector('.export-menu');
 
@@ -427,25 +484,26 @@
     }
   });
 
-  /* ── Keyboard Shortcuts ── */
+  /* ── 10. Keyboard Shortcuts ── */
+
   editor.addEventListener('keydown', (e) => {
     // Autocomplete navigation takes priority
-    if (acActive) {
+    if (ac.active) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        acIndex = (acIndex + 1) % acItems.length;
+        ac.index = (ac.index + 1) % ac.items.length;
         renderAutocomplete();
         return;
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        acIndex = (acIndex - 1 + acItems.length) % acItems.length;
+        ac.index = (ac.index - 1 + ac.items.length) % ac.items.length;
         renderAutocomplete();
         return;
       }
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
-        selectAutocompleteItem(acIndex);
+        selectAutocompleteItem(ac.index);
         return;
       }
       if (e.key === 'Escape') {
@@ -462,34 +520,35 @@
       e.preventDefault();
       insertSnippet({ before: '  ', after: '', placeholder: '' });
     }
-    // Ctrl/Cmd+B → bold
+    // Ctrl/Cmd+B -> bold
     if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
       e.preventDefault();
       insertSnippet(snippets.bold);
     }
-    // Ctrl/Cmd+I → italic
+    // Ctrl/Cmd+I -> italic
     if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
       e.preventDefault();
       insertSnippet(snippets.italic);
     }
-    // Ctrl/Cmd+Z → undo
+    // Ctrl/Cmd+Z -> undo
     if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
       e.preventDefault();
       history.undo();
     }
-    // Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y → redo
+    // Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y -> redo
     if ((e.ctrlKey || e.metaKey) && ((e.key === 'z' && e.shiftKey) || e.key === 'y')) {
       e.preventDefault();
       history.redo();
     }
-    // Ctrl/Cmd+S → save (prevent default)
+    // Ctrl/Cmd+S -> save (prevent default)
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
       e.preventDefault();
       Documents.save(editor.value).catch(() => {});
     }
   });
 
-  /* ── Modal Helper ── */
+  /* ── 11. Modals ── */
+
   function setupModal(overlay, openBtn, closeBtn, onOpen) {
     openBtn.addEventListener('click', () => {
       if (onOpen) onOpen();
@@ -501,7 +560,7 @@
     });
   }
 
-  /* ── Bibliography Modal ── */
+  /* Bibliography Modal */
   const bibBtn    = document.getElementById('bib-btn');
   const bibModal  = document.getElementById('bib-modal');
   const bibText   = document.getElementById('bib-textarea');
@@ -547,7 +606,7 @@
     updatePreview();
   });
 
-  /* ── Image Modal ── */
+  /* Image Modal */
   const imgManageBtn = document.getElementById('img-manage-btn');
   const imgModal     = document.getElementById('img-modal');
   const imgList      = document.getElementById('img-list');
@@ -607,16 +666,15 @@
     }
     imgFileInput.value = '';
     updatePreview();
-    // Re-render modal if open
     if (imgModal.style.display !== 'none') renderImageModal();
   });
 
-  /* ── Autocomplete (Citations + Images) ── */
+  /* ── 12. Autocomplete ── */
+
   const acDropdown = document.getElementById('autocomplete');
-  let acActive = false;
-  let acItems = [];
-  let acIndex = 0;
-  let acContext = null;
+
+  // Autocomplete state (reset between activations via hideAutocomplete)
+  const ac = { active: false, items: [], index: 0, context: null };
 
   function getCiteQuery() {
     const pos = editor.selectionStart;
@@ -653,11 +711,9 @@
     const pos = editor.selectionStart;
     if (pos !== editor.selectionEnd) return null;
     const text = editor.value;
-    // Scan back for backslash + letters
     let i = pos - 1;
     while (i >= 0 && /[a-zA-Z]/.test(text[i])) i--;
     if (i < 0 || text[i] !== '\\') return null;
-    // Verify we're inside math context
     if (!isInMathContext(text, i)) return null;
     const query = text.substring(i + 1, pos);
     return { start: i, end: pos, query };
@@ -667,16 +723,15 @@
     const pos = editor.selectionStart;
     if (pos !== editor.selectionEnd) return null;
     const text = editor.value;
-    // Scan backwards to find opening [
     let i = pos - 1;
     while (i >= 0 && text[i] !== '[' && text[i] !== ']' && text[i] !== '\n') i--;
     if (i < 0 || text[i] !== '[') return null;
     const query = text.substring(i + 1, pos);
-    // Case 1: @url[query|
+    // @url[query|
     if (i >= 4 && text.substring(i - 4, i) === '@url') {
       return { start: i + 1, end: pos, query };
     }
-    // Case 2: @url[name][query|  (second bracket)
+    // @url[name][query| (second bracket)
     if (i >= 1 && text[i - 1] === ']') {
       let j = i - 2;
       while (j >= 0 && text[j] !== '[' && text[j] !== '\n') j--;
@@ -687,6 +742,11 @@
     return null;
   }
 
+  /**
+   * Measures the viewport-relative pixel position of the cursor in the editor.
+   * Creates an off-screen mirror div that replicates the editor's styling and
+   * text content up to the cursor, then reads the marker element's offset.
+   */
   function getCaretCoords() {
     const pos = editor.selectionStart;
     const mirror = document.createElement('div');
@@ -724,36 +784,36 @@
   }
 
   function showAutocomplete() {
-    // Try LaTeX first (always available inside math context)
+    // LaTeX (inside math context)
     const latexCtx = getLatexQuery();
     if (latexCtx) {
       const latexResults = LatexCompletions.search(latexCtx.query);
       if (latexResults.length > 0) {
-        acContext = latexCtx;
-        acItems = latexResults.map(r => ({
+        ac.context = latexCtx;
+        ac.items = latexResults.map(r => ({
           type: 'latex', label: '\\' + r.name, detail: r.detail,
           template: r.template, cursorOffset: r.cursorOffset
         }));
-        acIndex = 0;
-        acActive = true;
+        ac.index = 0;
+        ac.active = true;
         renderAutocomplete();
         positionAutocomplete();
         return;
       }
     }
 
-    // URL citation autocomplete
+    // URL citations
     const urlCtx = getUrlCiteQuery();
     if (urlCtx) {
       const urlResults = Citations.searchUrlStore(urlCtx.query);
       if (urlResults.length > 0) {
-        acContext = urlCtx;
-        acItems = urlResults.map(r => ({
+        ac.context = urlCtx;
+        ac.items = urlResults.map(r => ({
           type: 'urlcite', url: r.url, label: r.url,
           detail: r.name || undefined
         }));
-        acIndex = 0;
-        acActive = true;
+        ac.index = 0;
+        ac.active = true;
         renderAutocomplete();
         positionAutocomplete();
         return;
@@ -786,10 +846,10 @@
 
     if (results.length === 0) { hideAutocomplete(); return; }
 
-    acContext = ctx;
-    acItems = results.slice(0, 8);
-    acIndex = 0;
-    acActive = true;
+    ac.context = ctx;
+    ac.items = results.slice(0, 8);
+    ac.index = 0;
+    ac.active = true;
 
     renderAutocomplete();
     positionAutocomplete();
@@ -797,9 +857,9 @@
 
   function renderAutocomplete() {
     acDropdown.innerHTML = '';
-    acItems.forEach((item, i) => {
+    ac.items.forEach((item, i) => {
       const div = document.createElement('div');
-      div.className = 'ac-item' + (i === acIndex ? ' ac-active' : '');
+      div.className = 'ac-item' + (i === ac.index ? ' ac-active' : '');
 
       const keySpan = document.createElement('span');
       keySpan.className = 'ac-key';
@@ -829,6 +889,7 @@
     acDropdown.style.top = (coords.top + lineHeight + 2) + 'px';
     acDropdown.style.left = coords.left + 'px';
 
+    // Keep dropdown within viewport
     const rect = acDropdown.getBoundingClientRect();
     if (rect.right > window.innerWidth - 8) {
       acDropdown.style.left = (window.innerWidth - rect.width - 8) + 'px';
@@ -839,12 +900,12 @@
   }
 
   function selectAutocompleteItem(index) {
-    if (!acContext || index < 0 || index >= acItems.length) return;
-    const item = acItems[index];
+    if (!ac.context || index < 0 || index >= ac.items.length) return;
+    const item = ac.items[index];
     history.save();
 
     if (item.type === 'latex') {
-      editor.setRangeText(item.template, acContext.start, acContext.end, 'end');
+      editor.setRangeText(item.template, ac.context.start, ac.context.end, 'end');
       if (item.cursorOffset > 0) {
         const newPos = editor.selectionStart - item.cursorOffset;
         editor.setSelectionRange(newPos, newPos);
@@ -855,12 +916,12 @@
     }
 
     if (item.type === 'urlcite') {
-      // Find end of current bracket content (consume up to ])
-      let endPos = acContext.end;
+      // Consume up to closing bracket
+      let endPos = ac.context.end;
       const text = editor.value;
       while (endPos < text.length && text[endPos] !== ']' && text[endPos] !== '\n') endPos++;
-      if (endPos < text.length && text[endPos] === ']') endPos++; // include ]
-      editor.setRangeText(item.url + ']', acContext.start, endPos, 'end');
+      if (endPos < text.length && text[endPos] === ']') endPos++;
+      editor.setRangeText(item.url + ']', ac.context.start, endPos, 'end');
       hideAutocomplete();
       editor.dispatchEvent(new Event('input'));
       return;
@@ -873,23 +934,21 @@
       replacement = '![][50](' + item.name + ')';
     }
 
-    editor.setRangeText(replacement, acContext.start, acContext.end, 'end');
+    editor.setRangeText(replacement, ac.context.start, ac.context.end, 'end');
     hideAutocomplete();
     editor.dispatchEvent(new Event('input'));
   }
 
   function hideAutocomplete() {
-    acActive = false;
-    acItems = [];
-    acIndex = 0;
-    acContext = null;
+    ac.active = false;
+    ac.items = [];
+    ac.index = 0;
+    ac.context = null;
     acDropdown.style.display = 'none';
   }
 
-  editor.addEventListener('input', () => { showAutocomplete(); checkSizeTooltip(); });
-  editor.addEventListener('click', () => { showAutocomplete(); checkSizeTooltip(); });
+  /* ── 13. Size Bracket Tooltip ── */
 
-  /* ── Size Bracket Tooltip ── */
   const sizeTooltip = document.createElement('div');
   sizeTooltip.className = 'size-tooltip';
   sizeTooltip.textContent = 'Width in % (e.g., 50)';
@@ -897,7 +956,7 @@
   document.body.appendChild(sizeTooltip);
 
   function checkSizeTooltip() {
-    if (acActive) { sizeTooltip.style.display = 'none'; return; }
+    if (ac.active) { sizeTooltip.style.display = 'none'; return; }
 
     const pos = editor.selectionStart;
     if (pos !== editor.selectionEnd) { sizeTooltip.style.display = 'none'; return; }
@@ -927,13 +986,13 @@
   });
   editor.addEventListener('blur', () => { sizeTooltip.style.display = 'none'; });
 
-  /* ── Table Grid Picker ── */
+  /* ── 14. Table Grid Picker & Context Menu ── */
+
   const tableBtn = document.getElementById('table-btn');
   const gridPicker = document.getElementById('table-grid-picker');
   const gridContainer = document.getElementById('grid-picker-grid');
   const gridLabel = gridPicker.querySelector('.grid-picker-label');
 
-  // Build 8×8 grid cells
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
       const cell = document.createElement('div');
@@ -1006,17 +1065,14 @@
     let prefix = '';
     if (start > 0 && editor.value[start - 1] !== '\n') prefix = '\n';
 
-    // Header row
     let table = prefix + '|';
     for (let c = 0; c < cols; c++) table += ' Header ' + (c + 1) + ' |';
     table += '\n';
 
-    // Separator row
     table += '|';
     for (let c = 0; c < cols; c++) table += ' --- |';
     table += '\n';
 
-    // Data rows (rows = count of data rows; header is always added above)
     for (let r = 0; r < rows; r++) {
       table += '|';
       for (let c = 0; c < cols; c++) table += '  |';
@@ -1027,7 +1083,8 @@
     editor.dispatchEvent(new Event('input'));
   }
 
-  /* ── Table Context Detection ── */
+  /* Table Context Detection */
+
   function getTableContext() {
     const pos = editor.selectionStart;
     const text = editor.value;
@@ -1041,19 +1098,16 @@
         cursorLine = i;
         break;
       }
-      charCount += allLines[i].length + 1; // +1 for \n
+      charCount += allLines[i].length + 1;
     }
 
-    // Check if current line is in a table (starts with |)
     if (!/^\|/.test(allLines[cursorLine].trim())) return null;
 
-    // Expand upward to find table start
+    // Expand to find table boundaries
     let tableStartLine = cursorLine;
     while (tableStartLine > 0 && /^\|/.test(allLines[tableStartLine - 1].trim())) {
       tableStartLine--;
     }
-
-    // Expand downward to find table end
     let tableEndLine = cursorLine;
     while (tableEndLine < allLines.length - 1 && /^\|/.test(allLines[tableEndLine + 1].trim())) {
       tableEndLine++;
@@ -1070,14 +1124,12 @@
     let tableCharEnd = tableCharStart;
     for (let i = tableStartLine; i <= tableEndLine; i++) tableCharEnd += allLines[i].length + 1;
 
-    // Row index relative to the table
+    // Row and column index relative to the table
     const tableRowIdx = cursorLine - tableStartLine;
-
-    // Column index: count | characters before cursor in the current line
-    const lineStart = charCount; // already computed as start of cursorLine
+    const lineStart = charCount;
     const cursorCol = pos - lineStart;
     const lineUpToCursor = allLines[cursorLine].substring(0, cursorCol);
-    const colIdx = (lineUpToCursor.match(/\|/g) || []).length - 1; // -1 because leading pipe
+    const colIdx = (lineUpToCursor.match(/\|/g) || []).length - 1;
 
     return {
       tableStartLine,
@@ -1090,7 +1142,8 @@
     };
   }
 
-  /* ── Table Context Menu ── */
+  /* Table Context Menu */
+
   const contextMenu = document.getElementById('table-context-menu');
 
   editor.addEventListener('contextmenu', (e) => {
@@ -1103,25 +1156,21 @@
     e.preventDefault();
     contextMenu._tableCtx = ctx;
 
-    // Position context menu
     contextMenu.style.top = e.clientY + 'px';
     contextMenu.style.left = e.clientX + 'px';
 
-    // Enable/disable buttons based on context
-    const rowCount = ctx.lines.length - 2; // exclude header + separator
+    const rowCount = ctx.lines.length - 2;
     const colCount = parseTableRow(ctx.lines[0]).length;
 
     const deleteRowBtn = contextMenu.querySelector('[data-action="delete-row"]');
     const deleteColBtn = contextMenu.querySelector('[data-action="delete-col"]');
 
-    // Disable delete row on header (row 0), separator (row 1), or when only 1 data row
     deleteRowBtn.disabled = ctx.tableRowIdx <= 1 || rowCount <= 1;
-    // Disable delete column when only 1 column
     deleteColBtn.disabled = colCount <= 1;
 
     contextMenu.classList.add('open');
 
-    // Ensure menu stays within viewport
+    // Keep menu within viewport
     const rect = contextMenu.getBoundingClientRect();
     if (rect.right > window.innerWidth) {
       contextMenu.style.left = (e.clientX - rect.width) + 'px';
@@ -1153,7 +1202,6 @@
     contextMenu.classList.remove('open');
     history.save();
 
-    // Parse all rows into arrays
     const parsed = ctx.lines.map(line => parseTableRow(line));
     const colCount = parsed[0].length;
 
@@ -1207,13 +1255,13 @@
     editor.dispatchEvent(new Event('input'));
   });
 
-  /* ── Sidebar ── */
+  /* ── 15. Sidebar ── */
+
   const sidebar = document.querySelector('.sidebar');
   const sidebarList = document.getElementById('sidebar-list');
   const sidebarToggle = document.getElementById('sidebar-toggle');
   const newDocBtn = document.getElementById('new-doc-btn');
 
-  // Restore collapsed state
   if (localStorage.getItem('tufte-sidebar-collapsed') === '1') {
     sidebar.classList.add('collapsed');
   }
@@ -1278,7 +1326,6 @@
   }
 
   async function switchDocument(name) {
-    // Flush pending save
     clearTimeout(saveTimer);
     await Documents.save(editor.value);
 
@@ -1292,7 +1339,6 @@
   }
 
   newDocBtn.addEventListener('click', async () => {
-    // Save current document first
     clearTimeout(saveTimer);
     await Documents.save(editor.value);
 
@@ -1300,7 +1346,6 @@
     loadDocument(doc);
     renderSidebar();
 
-    // Focus title and select it for editing
     docTitle.focus();
     const range = document.createRange();
     range.selectNodeContents(docTitle);
@@ -1311,7 +1356,8 @@
 
   renderSidebar();
 
-  /* ── Citation Style Toggle ── */
+  /* ── 16. Citation Style Toggle ── */
+
   const styleToggle = document.querySelector('.cite-style-toggle');
 
   function syncStyleToggle() {

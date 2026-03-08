@@ -64,8 +64,6 @@ function greet(name) {
   return `Hello, ${name}!`;
 }
 ```
-Ê
-
 - First item
 - Second item with **bold**
 - Third item
