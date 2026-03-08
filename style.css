@@ -437,6 +437,12 @@ body {
 
 /* Let margin notes float freely across section boundaries to avoid gaps */
 
+/* Ensure headings clear margin notes so they don't overlap */
+.preview-content h2,
+.preview-content h3 {
+  clear: right;
+}
+
 /* Divider */
 .divider {
   width: 9px;
