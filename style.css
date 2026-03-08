@@ -435,10 +435,7 @@ body {
   font-size: 0.875rem;
 }
 
-/* Contain floated margin figures/notes so sections expand to fit them */
-.preview-content section {
-  display: flow-root;
-}
+/* Let margin notes float freely across section boundaries to avoid gaps */
 
 /* Divider */
 .divider {
