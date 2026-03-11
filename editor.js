@@ -1255,12 +1255,14 @@
     editor.dispatchEvent(new Event('input'));
   });
 
-  /* ── 15. Sidebar ── */
+  /* ── 15. Sidebar (Document List & Folders) ── */
 
   const sidebar = document.querySelector('.sidebar');
   const sidebarList = document.getElementById('sidebar-list');
   const sidebarToggle = document.getElementById('sidebar-toggle');
   const newDocBtn = document.getElementById('new-doc-btn');
+  const newFolderBtn = document.getElementById('new-folder-btn');
+  const docContextMenu = document.getElementById('doc-context-menu');
 
   if (localStorage.getItem('tufte-sidebar-collapsed') === '1') {
     sidebar.classList.add('collapsed');
@@ -1284,44 +1286,280 @@
     return new Date(timestamp).toLocaleDateString();
   }
 
+  function createDocItem(doc, activeId) {
+    const item = document.createElement('div');
+    item.className = 'sidebar-item' + (doc.name === activeId ? ' active' : '');
+    item.setAttribute('draggable', 'true');
+
+    const title = document.createElement('span');
+    title.className = 'sidebar-item-title';
+    title.textContent = doc.title || 'Untitled Document';
+    item.appendChild(title);
+
+    const date = document.createElement('span');
+    date.className = 'sidebar-item-date';
+    date.textContent = formatRelativeDate(doc.mtime);
+    item.appendChild(date);
+
+    const del = document.createElement('button');
+    del.className = 'sidebar-item-delete';
+    del.textContent = '\u00d7';
+    del.title = 'Delete document';
+    del.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm('Delete "' + (doc.title || 'Untitled Document') + '"?')) return;
+      const result = await Documents.deleteDoc(doc.name);
+      loadDocument(result);
+      renderSidebar();
+    });
+    item.appendChild(del);
+
+    item.addEventListener('click', () => {
+      if (doc.name === activeId) return;
+      switchDocument(doc.name);
+    });
+
+    item.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showDocContextMenu(e, doc);
+    });
+
+    // Drag-and-drop: drag this doc to a folder
+    item.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', doc.name);
+      e.dataTransfer.effectAllowed = 'move';
+      item.classList.add('dragging');
+      sidebarList.classList.add('drag-active');
+    });
+
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      sidebarList.classList.remove('drag-active');
+      sidebarList.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    });
+
+    return item;
+  }
+
+  function showDocContextMenu(event, doc) {
+    const folders = Documents.listFolders();
+    docContextMenu.innerHTML = '';
+
+    const header = document.createElement('div');
+    header.className = 'context-menu-header';
+    header.textContent = 'Move to';
+    docContextMenu.appendChild(header);
+
+    // "Root" option if doc is in a folder
+    if (doc.folder) {
+      const btn = document.createElement('button');
+      btn.textContent = 'Root';
+      btn.addEventListener('click', async () => {
+        docContextMenu.classList.remove('open');
+        try {
+          await Documents.moveToFolder(doc.name, '');
+          renderSidebar();
+        } catch (err) { alert(err.message); }
+      });
+      docContextMenu.appendChild(btn);
+    }
+
+    // Folder options (excluding current folder)
+    folders.filter(f => f !== doc.folder).forEach(folder => {
+      const btn = document.createElement('button');
+      btn.textContent = folder;
+      btn.addEventListener('click', async () => {
+        docContextMenu.classList.remove('open');
+        try {
+          await Documents.moveToFolder(doc.name, folder);
+          renderSidebar();
+        } catch (err) { alert(err.message); }
+      });
+      docContextMenu.appendChild(btn);
+    });
+
+    // No targets available
+    if (!doc.folder && folders.filter(f => f !== doc.folder).length === 0) {
+      const empty = document.createElement('button');
+      empty.textContent = 'No folders available';
+      empty.disabled = true;
+      docContextMenu.appendChild(empty);
+    }
+
+    docContextMenu.style.left = event.clientX + 'px';
+    docContextMenu.style.top = event.clientY + 'px';
+    docContextMenu.classList.add('open');
+
+    function closeMenu(e) {
+      if (!docContextMenu.contains(e.target)) {
+        docContextMenu.classList.remove('open');
+        document.removeEventListener('mousedown', closeMenu);
+      }
+    }
+    setTimeout(() => document.addEventListener('mousedown', closeMenu), 0);
+  }
+
   function renderSidebar() {
     const docs = Documents.list();
+    const folders = Documents.listFolders();
     const activeId = Documents.getActiveId();
+    const collapsedFolders = JSON.parse(localStorage.getItem('tufte-folders-collapsed') || '{}');
+
     sidebarList.innerHTML = '';
 
-    docs.forEach(doc => {
-      const item = document.createElement('div');
-      item.className = 'sidebar-item' + (doc.name === activeId ? ' active' : '');
+    // Root drop zone (visible only during drag)
+    const rootDrop = document.createElement('div');
+    rootDrop.className = 'sidebar-root-drop';
+    rootDrop.textContent = 'Drop here for root';
+    rootDrop.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      rootDrop.classList.add('drag-over');
+    });
+    rootDrop.addEventListener('dragleave', () => {
+      rootDrop.classList.remove('drag-over');
+    });
+    rootDrop.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      rootDrop.classList.remove('drag-over');
+      const docName = e.dataTransfer.getData('text/plain');
+      if (!docName) return;
+      const entry = Documents.list().find(d => d.name === docName);
+      if (!entry || !entry.folder) return;
+      try {
+        await Documents.moveToFolder(docName, '');
+        renderSidebar();
+      } catch (err) { alert(err.message); }
+    });
+    sidebarList.appendChild(rootDrop);
 
-      const title = document.createElement('span');
-      title.className = 'sidebar-item-title';
-      title.textContent = doc.title || 'Untitled Document';
-      item.appendChild(title);
+    // Root docs (no folder), sorted by mtime (server already sorts)
+    const rootDocs = docs.filter(d => !d.folder);
+    rootDocs.forEach(doc => sidebarList.appendChild(createDocItem(doc, activeId)));
 
-      const date = document.createElement('span');
-      date.className = 'sidebar-item-date';
-      date.textContent = formatRelativeDate(doc.mtime);
-      item.appendChild(date);
+    // Collect all folder names (from API + any referenced in docs)
+    const allFolderNames = new Set(folders);
+    docs.forEach(d => { if (d.folder) allFolderNames.add(d.folder); });
+    const sortedFolders = [...allFolderNames].sort();
 
+    sortedFolders.forEach(folder => {
+      const folderDocs = docs.filter(d => d.folder === folder);
+      const isCollapsed = !!collapsedFolders[folder];
+
+      const folderEl = document.createElement('div');
+      folderEl.className = 'sidebar-folder';
+
+      // Folder header
+      const header = document.createElement('div');
+      header.className = 'sidebar-folder-header';
+
+      const arrow = document.createElement('span');
+      arrow.className = 'sidebar-folder-arrow' + (isCollapsed ? '' : ' expanded');
+      arrow.textContent = '\u25B6';
+      header.appendChild(arrow);
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'sidebar-folder-name';
+      nameEl.textContent = folder;
+      header.appendChild(nameEl);
+
+      const countEl = document.createElement('span');
+      countEl.className = 'sidebar-folder-count';
+      countEl.textContent = folderDocs.length;
+      header.appendChild(countEl);
+
+      // Add doc to folder
+      const addBtn = document.createElement('button');
+      addBtn.className = 'sidebar-folder-add';
+      addBtn.textContent = '+';
+      addBtn.title = 'New document in ' + folder;
+      addBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        clearTimeout(saveTimer);
+        await Documents.save(editor.value);
+        const doc = await Documents.create(null, folder);
+        loadDocument(doc);
+        collapsedFolders[folder] = false;
+        localStorage.setItem('tufte-folders-collapsed', JSON.stringify(collapsedFolders));
+        renderSidebar();
+        docTitle.focus();
+        const range = document.createRange();
+        range.selectNodeContents(docTitle);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      });
+      header.appendChild(addBtn);
+
+      // Delete folder
       const del = document.createElement('button');
-      del.className = 'sidebar-item-delete';
+      del.className = 'sidebar-folder-delete';
       del.textContent = '\u00d7';
-      del.title = 'Delete document';
+      del.title = 'Delete folder';
       del.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (!confirm('Delete "' + (doc.title || 'Untitled Document') + '"?')) return;
-        const result = await Documents.deleteDoc(doc.name);
-        loadDocument(result);
+        const docCount = folderDocs.length;
+        const msg = docCount > 0
+          ? 'Delete folder "' + folder + '" and its ' + docCount + ' document' + (docCount !== 1 ? 's' : '') + '?'
+          : 'Delete empty folder "' + folder + '"?';
+        if (!confirm(msg)) return;
+        try {
+          await Documents.deleteFolder(folder);
+          // If active doc was deleted, load the new active or create one
+          const remaining = Documents.list();
+          if (remaining.length > 0) {
+            const doc = await Documents.load(Documents.getActiveId());
+            if (doc) loadDocument(doc);
+          } else {
+            const doc = await Documents.create();
+            loadDocument(doc);
+          }
+          renderSidebar();
+        } catch (err) { alert(err.message); }
+      });
+      header.appendChild(del);
+
+      header.addEventListener('click', () => {
+        collapsedFolders[folder] = !collapsedFolders[folder];
+        localStorage.setItem('tufte-folders-collapsed', JSON.stringify(collapsedFolders));
         renderSidebar();
       });
-      item.appendChild(del);
 
-      item.addEventListener('click', () => {
-        if (doc.name === activeId) return;
-        switchDocument(doc.name);
+      // Drop target: accept docs dragged onto this folder
+      header.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        header.classList.add('drag-over');
+      });
+      header.addEventListener('dragleave', () => {
+        header.classList.remove('drag-over');
+      });
+      header.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        header.classList.remove('drag-over');
+        const docName = e.dataTransfer.getData('text/plain');
+        if (!docName) return;
+        const entry = Documents.list().find(d => d.name === docName);
+        if (!entry || entry.folder === folder) return;
+        try {
+          await Documents.moveToFolder(docName, folder);
+          collapsedFolders[folder] = false;
+          localStorage.setItem('tufte-folders-collapsed', JSON.stringify(collapsedFolders));
+          renderSidebar();
+        } catch (err) { alert(err.message); }
       });
 
-      sidebarList.appendChild(item);
+      folderEl.appendChild(header);
+
+      // Folder items (if expanded)
+      if (!isCollapsed) {
+        const items = document.createElement('div');
+        items.className = 'sidebar-folder-items';
+        folderDocs.forEach(doc => items.appendChild(createDocItem(doc, activeId)));
+        folderEl.appendChild(items);
+      }
+
+      sidebarList.appendChild(folderEl);
     });
   }
 
@@ -1352,6 +1590,17 @@
     const sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(range);
+  });
+
+  newFolderBtn.addEventListener('click', async () => {
+    const name = prompt('Folder name:');
+    if (!name || !name.trim()) return;
+    try {
+      await Documents.createFolder(name.trim());
+      renderSidebar();
+    } catch (err) {
+      alert(err.message);
+    }
   });
 
   renderSidebar();

@@ -263,6 +263,13 @@ body {
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  gap: 8px;
+}
+
+.sidebar-header-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .sidebar-title {
@@ -348,6 +355,125 @@ body {
 .sidebar-item-delete:hover {
   color: #c00;
   background: #fff0f0;
+}
+
+/* ── Sidebar Folders ── */
+.sidebar-folder-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+  gap: 6px;
+  border-bottom: 1px solid var(--bg-dark);
+  user-select: none;
+}
+
+.sidebar-folder-header:hover {
+  background: var(--bg);
+}
+
+.sidebar-folder-arrow {
+  font-size: 10px;
+  display: inline-block;
+  width: 12px;
+  text-align: center;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+.sidebar-folder-arrow.expanded {
+  transform: rotate(90deg);
+}
+
+.sidebar-folder-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--accent);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-folder-count {
+  font-size: 11px;
+  color: #aaa;
+  flex-shrink: 0;
+}
+
+.sidebar-folder-add,
+.sidebar-folder-delete {
+  border: none;
+  background: none;
+  font-size: 14px;
+  color: #aaa;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.sidebar-folder-header:hover .sidebar-folder-add,
+.sidebar-folder-header:hover .sidebar-folder-delete {
+  opacity: 1;
+}
+
+.sidebar-folder-add:hover {
+  color: var(--accent);
+  background: var(--bg-dark);
+}
+
+.sidebar-folder-delete:hover {
+  color: #c00;
+  background: #fff0f0;
+}
+
+.sidebar-folder-items .sidebar-item {
+  padding-left: 30px;
+}
+
+.sidebar-folder-items .sidebar-item.active {
+  padding-left: 27px;
+}
+
+/* ── Drag and Drop ── */
+.sidebar-item.dragging {
+  opacity: 0.4;
+}
+
+.sidebar-root-drop {
+  display: none;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #888;
+  text-align: center;
+  border-bottom: 1px dashed var(--border);
+}
+
+.drag-active .sidebar-root-drop {
+  display: block;
+}
+
+.sidebar-root-drop.drag-over {
+  background: #d0e4f7;
+  color: #333;
+  border-color: #6699cc;
+}
+
+.sidebar-folder-header.drag-over {
+  background: #d0e4f7;
+  border-bottom-color: #6699cc;
+}
+
+.context-menu-header {
+  padding: 6px 12px;
+  font-size: 11px;
+  color: #888;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .sidebar-toggle-btn {

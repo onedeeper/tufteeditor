@@ -47,17 +47,28 @@ async function api(method, urlPath, body, headers = {}) {
 // --- Snapshot original docs so we can restore after tests ---
 
 const origDocs = new Map();
+const origFolders = new Set();
 
 function snapshotDocs() {
   for (const f of fs.readdirSync(DOCS_DIR)) {
-    origDocs.set(f, fs.readFileSync(path.join(DOCS_DIR, f)));
+    const fp = path.join(DOCS_DIR, f);
+    if (fs.statSync(fp).isDirectory()) {
+      origFolders.add(f);
+    } else {
+      origDocs.set(f, fs.readFileSync(fp));
+    }
   }
 }
 
 function restoreDocs() {
-  // Remove any test-created files
+  // Remove any test-created files and folders
   for (const f of fs.readdirSync(DOCS_DIR)) {
-    if (!origDocs.has(f)) fs.unlinkSync(path.join(DOCS_DIR, f));
+    const fp = path.join(DOCS_DIR, f);
+    if (fs.statSync(fp).isDirectory()) {
+      if (!origFolders.has(f)) fs.rmSync(fp, { recursive: true });
+    } else if (!origDocs.has(f)) {
+      fs.unlinkSync(fp);
+    }
   }
   // Restore originals
   for (const [f, buf] of origDocs) {
@@ -112,6 +123,8 @@ async function testDocsCRUD() {
   const initial = r.json.length;
   assert(r.json.some(d => d.name === 'guide.md'), 'guide.md in list');
   assert(r.json[0].mtime > 0, 'docs have mtime');
+  const guideDoc = r.json.find(d => d.name === 'guide.md');
+  assert(guideDoc.folder === '', 'root docs have empty folder field');
 
   // Create a new doc
   r = await api('PUT', '/api/docs/Test%20Doc.md', 'Hello world');
@@ -212,8 +225,8 @@ async function testPathTraversal() {
   console.log('\nPath traversal prevention');
 
   let r = await api('GET', '/api/docs/..%2F..%2Fetc%2Fpasswd.md');
-  // path.basename strips traversal, so this should be "passwd.md" which doesn't exist
-  assert(r.status === 404, 'traversal in docs blocked (404 not file content)');
+  // safeDocPath rejects paths with ".." segments
+  assert(r.status === 400 || r.status === 404, 'traversal in docs blocked');
 
   r = await api('DELETE', '/api/uploads/..%2F..%2Fserver.js');
   assert(r.status === 404, 'traversal in uploads blocked');
@@ -226,6 +239,87 @@ async function testPathTraversal() {
   // Malformed JSON in PATCH
   r = await api('PATCH', '/api/docs/guide.md', 'not json', { 'Content-Type': 'application/json' });
   assert(r.status === 400, 'malformed JSON returns 400');
+}
+
+async function testFolders() {
+  console.log('\nFolders API');
+
+  // List folders (should be empty initially)
+  let r = await api('GET', '/api/folders');
+  assert(r.status === 200, 'GET /api/folders returns 200');
+  assert(Array.isArray(r.json), 'folders returns an array');
+  const initialFolders = r.json.length;
+
+  // Create a folder
+  r = await api('POST', '/api/folders', JSON.stringify({ name: 'TestNotes' }), { 'Content-Type': 'application/json' });
+  assert(r.status === 200, 'POST creates folder');
+  assert(fs.existsSync(path.join(DOCS_DIR, 'TestNotes')), 'folder created on disk');
+
+  // List folders
+  r = await api('GET', '/api/folders');
+  assert(r.json.length === initialFolders + 1, 'folder count increased');
+  assert(r.json.includes('TestNotes'), 'new folder in list');
+
+  // Duplicate folder
+  r = await api('POST', '/api/folders', JSON.stringify({ name: 'TestNotes' }), { 'Content-Type': 'application/json' });
+  assert(r.status === 409, 'duplicate folder returns 409');
+
+  // Create doc in folder
+  r = await api('PUT', '/api/docs/TestNotes/Folder%20Doc.md', 'Folder content');
+  assert(r.status === 200, 'PUT creates doc in folder');
+  assert(fs.existsSync(path.join(DOCS_DIR, 'TestNotes', 'Folder Doc.md')), 'doc written in folder');
+
+  // Read doc from folder
+  r = await api('GET', '/api/docs/TestNotes/Folder%20Doc.md');
+  assert(r.status === 200, 'GET reads doc from folder');
+  assert(r.text === 'Folder content', 'folder doc content matches');
+
+  // List all docs includes folder doc
+  r = await api('GET', '/api/docs');
+  const folderDoc = r.json.find(d => d.name === 'TestNotes/Folder Doc.md');
+  assert(folderDoc !== undefined, 'folder doc in list');
+  assert(folderDoc.folder === 'TestNotes', 'folder field set correctly');
+
+  // Move doc to root
+  r = await api('PATCH', '/api/docs/TestNotes/Folder%20Doc.md',
+    JSON.stringify({ folder: '' }),
+    { 'Content-Type': 'application/json' });
+  assert(r.status === 200, 'PATCH moves doc to root');
+  assert(r.json.name === 'Folder Doc.md', 'moved doc name is correct');
+  assert(fs.existsSync(path.join(DOCS_DIR, 'Folder Doc.md')), 'doc now at root');
+  assert(!fs.existsSync(path.join(DOCS_DIR, 'TestNotes', 'Folder Doc.md')), 'doc gone from folder');
+
+  // Move doc back to folder
+  r = await api('PATCH', '/api/docs/Folder%20Doc.md',
+    JSON.stringify({ folder: 'TestNotes' }),
+    { 'Content-Type': 'application/json' });
+  assert(r.status === 200, 'PATCH moves doc to folder');
+  assert(r.json.name === 'TestNotes/Folder Doc.md', 'moved doc path correct');
+
+  // Delete folder with docs (recursive delete)
+  r = await api('DELETE', '/api/folders/TestNotes');
+  assert(r.status === 200, 'DELETE removes folder with contents');
+  assert(!fs.existsSync(path.join(DOCS_DIR, 'TestNotes')), 'folder removed from disk');
+  assert(!fs.existsSync(path.join(DOCS_DIR, 'TestNotes', 'Folder Doc.md')), 'docs inside removed too');
+
+  // List should be back to initial
+  r = await api('GET', '/api/folders');
+  assert(r.json.length === initialFolders, 'folder count back to initial');
+
+  // Create doc in nonexistent folder should fail
+  r = await api('PUT', '/api/docs/NoSuchFolder/doc.md', 'content');
+  assert(r.status === 400, 'PUT in nonexistent folder returns 400');
+
+  // Path traversal in folder names
+  r = await api('POST', '/api/folders', JSON.stringify({ name: '../etc' }), { 'Content-Type': 'application/json' });
+  assert(r.status === 200 || r.status === 400, 'folder traversal handled');
+  // safeName strips path, so ../etc becomes "etc" — clean up if it was created
+  const etcPath = path.join(DOCS_DIR, 'etc');
+  if (fs.existsSync(etcPath)) fs.rmdirSync(etcPath);
+
+  // Deeply nested doc path should be rejected
+  r = await api('GET', '/api/docs/a/b/c.md');
+  assert(r.status === 400, 'deeply nested path rejected');
 }
 
 // --- Load parser once, expose both parseMarkdown and generateFullHTML ---
@@ -500,6 +594,7 @@ function testTablePreviewCSS() {
     console.log('Server running at ' + BASE);
 
     await testDocsCRUD();
+    await testFolders();
     await testUploads();
     await testStaticServing();
     await testPathTraversal();

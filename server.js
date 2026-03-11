@@ -63,27 +63,53 @@ function safeName(name) {
   return path.basename(name);
 }
 
+function safeDocPath(route) {
+  const parts = route.split('/').filter(Boolean);
+  for (const part of parts) {
+    if (part === '..' || part === '.' || part.includes('\\')) return null;
+    if (path.basename(part) !== part) return null;
+  }
+  if (parts.length === 1 && parts[0].endsWith('.md')) {
+    return { folder: '', name: parts[0], filePath: path.join(DOCS_DIR, parts[0]) };
+  }
+  if (parts.length === 2 && parts[1].endsWith('.md')) {
+    return { folder: parts[0], name: parts[1], filePath: path.join(DOCS_DIR, parts[0], parts[1]) };
+  }
+  return null;
+}
+
 // --- API handlers ---
 
 function handleDocsAPI(req, res, urlPath) {
   const route = urlPath.replace(/^\/api\/docs\/?/, '');
 
-  // GET /api/docs — list docs
+  // GET /api/docs — list docs (scans 1 level of subfolders)
   if (req.method === 'GET' && route === '') {
-    const files = fs.readdirSync(DOCS_DIR).filter(f => f.endsWith('.md'));
-    const docs = files.map(f => {
-      const stat = fs.statSync(path.join(DOCS_DIR, f));
-      return { name: f, title: f.replace(/\.md$/, ''), mtime: stat.mtimeMs };
-    });
-    docs.sort((a, b) => b.mtime - a.mtime);
-    return sendJSON(res, 200, docs);
+    const entries = [];
+    const items = fs.readdirSync(DOCS_DIR, { withFileTypes: true });
+    for (const item of items) {
+      if (item.isFile() && item.name.endsWith('.md')) {
+        const stat = fs.statSync(path.join(DOCS_DIR, item.name));
+        entries.push({ name: item.name, title: item.name.replace(/\.md$/, ''), mtime: stat.mtimeMs, folder: '' });
+      } else if (item.isDirectory()) {
+        const subDir = path.join(DOCS_DIR, item.name);
+        for (const sf of fs.readdirSync(subDir)) {
+          if (sf.endsWith('.md')) {
+            const stat = fs.statSync(path.join(subDir, sf));
+            entries.push({ name: item.name + '/' + sf, title: sf.replace(/\.md$/, ''), mtime: stat.mtimeMs, folder: item.name });
+          }
+        }
+      }
+    }
+    entries.sort((a, b) => b.mtime - a.mtime);
+    return sendJSON(res, 200, entries);
   }
 
-  const name = safeName(route);
-  if (!name || !name.endsWith('.md')) {
+  const docInfo = safeDocPath(route);
+  if (!docInfo) {
     return sendJSON(res, 400, { error: 'Invalid document name' });
   }
-  const filePath = path.join(DOCS_DIR, name);
+  const filePath = docInfo.filePath;
 
   // GET /api/docs/:name — read doc
   if (req.method === 'GET') {
@@ -95,29 +121,41 @@ function handleDocsAPI(req, res, urlPath) {
   // PUT /api/docs/:name — create/update doc
   if (req.method === 'PUT') {
     return readBody(req).then(body => {
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) return sendJSON(res, 400, { error: 'Folder does not exist' });
       fs.writeFileSync(filePath, body.toString('utf-8'));
       sendJSON(res, 200, { ok: true });
     }).catch(err => sendJSON(res, 400, { error: err.message }));
   }
 
-  // PATCH /api/docs/:name — rename doc
+  // PATCH /api/docs/:name — rename or move doc
   if (req.method === 'PATCH') {
     return readBody(req).then(body => {
       let parsed;
       try { parsed = JSON.parse(body.toString('utf-8')); } catch {
         return sendJSON(res, 400, { error: 'Invalid JSON' });
       }
-      const safeDst = safeName(parsed.newName || '');
-      if (!safeDst || !safeDst.endsWith('.md')) {
+      const dstFileName = parsed.newName ? safeName(parsed.newName) : docInfo.name;
+      if (!dstFileName || !dstFileName.endsWith('.md')) {
         return sendJSON(res, 400, { error: 'Invalid new name' });
       }
-      const dstPath = path.join(DOCS_DIR, safeDst);
-      if (fs.existsSync(dstPath)) {
+      let dstFolder = parsed.folder !== undefined ? parsed.folder : docInfo.folder;
+      if (dstFolder) {
+        dstFolder = safeName(dstFolder);
+        if (!dstFolder) return sendJSON(res, 400, { error: 'Invalid folder' });
+      }
+      const dstDir = dstFolder ? path.join(DOCS_DIR, dstFolder) : DOCS_DIR;
+      if (dstFolder && !fs.existsSync(dstDir)) {
+        return sendJSON(res, 400, { error: 'Destination folder does not exist' });
+      }
+      const dstPath = path.join(dstDir, dstFileName);
+      if (!fs.existsSync(filePath)) return sendJSON(res, 404, { error: 'Not found' });
+      if (fs.existsSync(dstPath) && dstPath !== filePath) {
         return sendJSON(res, 409, { error: 'A document with that name already exists' });
       }
-      if (!fs.existsSync(filePath)) return sendJSON(res, 404, { error: 'Not found' });
       fs.renameSync(filePath, dstPath);
-      sendJSON(res, 200, { ok: true, name: safeDst });
+      const newName = dstFolder ? dstFolder + '/' + dstFileName : dstFileName;
+      sendJSON(res, 200, { ok: true, name: newName });
     }).catch(err => sendJSON(res, 400, { error: err.message }));
   }
 
@@ -187,6 +225,48 @@ function handleBibliographyAPI(req, res) {
   sendJSON(res, 405, { error: 'Method not allowed' });
 }
 
+function handleFoldersAPI(req, res, urlPath) {
+  const route = urlPath.replace(/^\/api\/folders\/?/, '');
+
+  // GET /api/folders — list folders
+  if (req.method === 'GET' && route === '') {
+    const items = fs.readdirSync(DOCS_DIR, { withFileTypes: true });
+    const folders = items.filter(i => i.isDirectory()).map(i => i.name).sort();
+    return sendJSON(res, 200, folders);
+  }
+
+  // POST /api/folders — create folder
+  if (req.method === 'POST' && route === '') {
+    return readBody(req).then(body => {
+      let parsed;
+      try { parsed = JSON.parse(body.toString('utf-8')); } catch {
+        return sendJSON(res, 400, { error: 'Invalid JSON' });
+      }
+      const name = safeName(parsed.name || '');
+      if (!name) return sendJSON(res, 400, { error: 'Invalid folder name' });
+      const folderPath = path.join(DOCS_DIR, name);
+      if (fs.existsSync(folderPath)) {
+        return sendJSON(res, 409, { error: 'Folder already exists' });
+      }
+      fs.mkdirSync(folderPath);
+      sendJSON(res, 200, { ok: true, name });
+    }).catch(err => sendJSON(res, 400, { error: err.message }));
+  }
+
+  // DELETE /api/folders/:name — delete folder and all contents
+  if (req.method === 'DELETE' && route !== '') {
+    const name = safeName(route);
+    const folderPath = path.join(DOCS_DIR, name);
+    if (!fs.existsSync(folderPath) || !fs.statSync(folderPath).isDirectory()) {
+      return sendJSON(res, 404, { error: 'Folder not found' });
+    }
+    fs.rmSync(folderPath, { recursive: true });
+    return sendJSON(res, 200, { ok: true });
+  }
+
+  sendJSON(res, 405, { error: 'Method not allowed' });
+}
+
 // --- Static file serving ---
 
 function serveStatic(req, res, urlPath) {
@@ -231,6 +311,9 @@ const server = http.createServer((req, res) => {
 
   if (urlPath.startsWith('/api/docs')) {
     return handleDocsAPI(req, res, urlPath);
+  }
+  if (urlPath.startsWith('/api/folders')) {
+    return handleFoldersAPI(req, res, urlPath);
   }
   if (urlPath.startsWith('/api/uploads')) {
     return handleUploadsAPI(req, res, urlPath);

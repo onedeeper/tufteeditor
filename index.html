@@ -80,7 +80,10 @@
       <aside class="sidebar">
         <div class="sidebar-header">
           <span class="sidebar-title">Documents</span>
-          <button id="new-doc-btn" class="sidebar-new-btn" title="New document">+ New</button>
+          <div class="sidebar-header-actions">
+            <button id="new-folder-btn" class="sidebar-new-btn" title="New folder">+ Folder</button>
+            <button id="new-doc-btn" class="sidebar-new-btn" title="New document">+ Doc</button>
+          </div>
         </div>
         <div class="sidebar-list" id="sidebar-list"></div>
       </aside>
@@ -97,6 +100,9 @@
         </div>
       </div>
     </div>
+
+    <!-- Document Context Menu (move to folder) -->
+    <div id="doc-context-menu" class="table-context-menu"></div>
 
     <!-- Citation Autocomplete -->
     <div id="autocomplete" class="autocomplete-dropdown"></div>
