@@ -358,10 +358,6 @@
     const key = btn.dataset.insert;
     const snip = snippets[key];
     if (!snip) return;
-    if (key === 'image' || key === 'fullwidth' || key === 'marginfig') {
-      insertSnippet(snip);
-      return;
-    }
     insertSnippet(snip);
   });
 

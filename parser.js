@@ -10,12 +10,16 @@ let _sidenoteCounter = 0;
 let _marginnoteCounter = 0;
 let _figureCounter = 0;
 let _figureLabelMap = {};
+let _tableCounter = 0;
+let _tableLabelMap = {};
 
 function resetCounters() {
   _sidenoteCounter = 0;
   _marginnoteCounter = 0;
   _figureCounter = 0;
   _figureLabelMap = {};
+  _tableCounter = 0;
+  _tableLabelMap = {};
 }
 
 function parseModifiers(str) {
@@ -78,6 +82,11 @@ function parseInline(text) {
     return `<a href="#fig-${escapeAttr(label.trim())}" class="figure-ref">\x00FIGREF:${label.trim()}\x00</a>`;
   });
 
+  // Table references: {tbl:label} → resolved after full document parse
+  text = text.replace(/\{tbl:([^}]+)\}/g, (_, label) => {
+    return `<a href="#tbl-${escapeAttr(label.trim())}" class="table-ref">\x00TBLREF:${label.trim()}\x00</a>`;
+  });
+
   // Citations: @url[url] and @key — single pass for stable left-to-right numbering
   text = text.replace(/@url\[([^\]]*)\]\[([^\]]+)\]|@url\[([^\]]+)\]|(?<!\w)@([a-zA-Z][\w:-]*)/g, (match, urlName, urlUrl, urlOnly, keyMatch) => {
     if (urlUrl !== undefined) return Citations.formatInlineUrlCitation(urlUrl, urlName || '');
@@ -99,9 +108,10 @@ function parseInline(text) {
       return marginToggleHTML('mn-fig-' + (++_marginnoteCounter), '&#8853;', 'marginnote', imgTag + (caption ? '<br>' + caption : ''));
     }
 
+    const figClass = mods.type === 'fullwidth' ? ' class="fullwidth"' : '';
+
     // Auto-number non-margin figures that have a caption or label
-    const shouldNumber = caption || mods.label;
-    if (shouldNumber) {
+    if (caption || mods.label) {
       _figureCounter++;
       const figNum = _figureCounter;
       const figId = mods.label ? `fig-${mods.label}` : `fig-${figNum}`;
@@ -110,11 +120,9 @@ function parseInline(text) {
       const figCaption = caption
         ? `<figcaption><strong>Figure ${figNum}:</strong> ${caption}</figcaption>`
         : `<figcaption><strong>Figure ${figNum}</strong></figcaption>`;
-      const figClass = mods.type === 'fullwidth' ? ' class="fullwidth"' : '';
       return `<figure id="${figId}"${figClass}>${imgTag}${figCaption}</figure>`;
     }
 
-    const figClass = mods.type === 'fullwidth' ? ' class="fullwidth"' : '';
     return `<figure${figClass}>${imgTag}</figure>`;
   });
 
@@ -156,8 +164,35 @@ function parseTableRow(line) {
 }
 
 function parseTable(lines, dataLineAttr) {
-  const headerCells = parseTableRow(lines[0]);
-  const sepCells = parseTableRow(lines[1]);
+  // Check for caption line: |: Caption text {label:name}
+  const hasCaption = /^\|:\s/.test(lines[0]);
+  const dataLines = hasCaption ? lines.slice(1) : lines;
+
+  let captionHTML = '';
+  let wrapperId = '';
+
+  if (hasCaption) {
+    let rawCaption = lines[0].replace(/^\|:\s*/, '');
+    let label = null;
+    const labelMatch = rawCaption.match(/\{label:([^}]+)\}/);
+    if (labelMatch) {
+      label = labelMatch[1].trim();
+      rawCaption = rawCaption.replace(/\{label:[^}]+\}/, '').trim();
+    }
+
+    _tableCounter++;
+    const tblNum = _tableCounter;
+    if (label) _tableLabelMap[label] = tblNum;
+    wrapperId = ` id="${label ? 'tbl-' + label : 'tbl-' + tblNum}"`;
+
+    const captionContent = rawCaption
+      ? `<strong>Table ${tblNum}:</strong> ${parseInline(rawCaption)}`
+      : `<strong>Table ${tblNum}</strong>`;
+    captionHTML = `<caption>${captionContent}</caption>\n`;
+  }
+
+  const headerCells = parseTableRow(dataLines[0]);
+  const sepCells = parseTableRow(dataLines[1]);
 
   // Determine alignment from separator row
   const alignments = sepCells.map(cell => {
@@ -173,14 +208,14 @@ function parseTable(lines, dataLineAttr) {
     return a !== 'left' ? ` style="text-align:${a}"` : '';
   };
 
-  let html = `<div class="table-wrapper"${dataLineAttr}><table>\n<thead><tr>`;
+  let html = `<div class="table-wrapper"${wrapperId}${dataLineAttr}><table>\n${captionHTML}<thead><tr>`;
   headerCells.forEach((cell, i) => {
     html += `<th${alignAttr(i)}>${parseInline(cell)}</th>`;
   });
   html += '</tr></thead>\n<tbody>\n';
 
-  for (let r = 2; r < lines.length; r++) {
-    const cells = parseTableRow(lines[r]);
+  for (let r = 2; r < dataLines.length; r++) {
+    const cells = parseTableRow(dataLines[r]);
     html += '<tr>';
     headerCells.forEach((_, i) => {
       html += `<td${alignAttr(i)}>${parseInline(cells[i] || '')}</td>`;
@@ -342,11 +377,12 @@ function parseMarkdown(src) {
       continue;
     }
 
-    // Table (GFM pipe table)
+    // Table (GFM pipe table, with optional |: caption line)
     const tableLines = block.split('\n');
-    if (tableLines.length >= 2 &&
-        /^\|/.test(tableLines[0].trim()) &&
-        /^\|[\s\-:|]+\|$/.test(tableLines[1].trim())) {
+    const captionOffset = /^\|:\s/.test(tableLines[0]) ? 1 : 0;
+    if (tableLines.length >= captionOffset + 2 &&
+        /^\|/.test(tableLines[captionOffset].trim()) &&
+        /^\|[\s\-:|]+\|$/.test(tableLines[captionOffset + 1].trim())) {
       html += parseTable(tableLines, dl);
       continue;
     }
@@ -365,6 +401,12 @@ function parseMarkdown(src) {
     return num !== undefined ? `Figure ${num}` : `Figure ??`;
   });
 
+  // Resolve table references
+  html = html.replace(/\x00TBLREF:([^\x00]+)\x00/g, (_, label) => {
+    const num = _tableLabelMap[label.trim()];
+    return num !== undefined ? `Table ${num}` : `Table ??`;
+  });
+
   return html;
 }
 
@@ -380,7 +422,7 @@ function generateFullHTML(bodyHTML, title) {
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tufte-css/1.8.0/tufte.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
-<style>body { padding: 2rem 0; } section { display: flow-root; } pre { width: 55%; overflow-x: auto; } figure { display: table; text-align: center; } figcaption { display: table-caption; caption-side: bottom; float: none; margin-top: 0.4em; font-size: 0.875rem; text-align: center; } a.figure-ref { text-decoration: none; background: none; text-shadow: none; color: inherit; border-bottom: 1px solid #999; } a.figure-ref:hover { border-bottom-color: #333; } article img { cursor: zoom-in; } .lightbox-overlay { position:fixed; inset:0; background:rgba(0,0,0,.9); display:flex; align-items:center; justify-content:center; z-index:500; cursor:zoom-out; } .lightbox-img { max-width:90vw; max-height:90vh; object-fit:contain; user-select:none; -webkit-user-select:none; } .table-wrapper { width:55%; margin:1.5em 0; overflow-x:auto; } table { border-collapse:collapse; width:100%; } th { text-align:left; padding:0.5em 0.75em; border-bottom:2px solid #333; font-weight:600; } td { padding:0.4em 0.75em; border-bottom:1px solid #ddd; } @media print { .table-wrapper { width:100%; } }${Citations.getCitationCSS()}</style>
+<style>body { padding: 2rem 0; } section { display: flow-root; } pre { width: 55%; overflow-x: auto; } figure { display: table; text-align: center; } figcaption { display: table-caption; caption-side: bottom; float: none; margin-top: 0.4em; font-size: 0.875rem; text-align: center; } a.figure-ref, a.table-ref { text-decoration: none; background: none; text-shadow: none; color: inherit; border-bottom: 1px solid #999; } a.figure-ref:hover, a.table-ref:hover { border-bottom-color: #333; } caption { caption-side: top; text-align: left; padding: 0.4em 0; font-size: 0.875rem; } article img { cursor: zoom-in; } .lightbox-overlay { position:fixed; inset:0; background:rgba(0,0,0,.9); display:flex; align-items:center; justify-content:center; z-index:500; cursor:zoom-out; } .lightbox-img { max-width:90vw; max-height:90vh; object-fit:contain; user-select:none; -webkit-user-select:none; } .table-wrapper { width:55%; margin:1.5em 0; overflow-x:auto; } table { border-collapse:collapse; width:100%; } th { text-align:left; padding:0.5em 0.75em; border-bottom:2px solid #333; font-weight:600; } td { padding:0.4em 0.75em; border-bottom:1px solid #ddd; } @media print { .table-wrapper { width:100%; } }${Citations.getCitationCSS()}</style>
 </head>
 <body>
 <article>

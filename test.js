@@ -5,7 +5,6 @@
  * then tears down. Run: node test.js
  */
 
-const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
@@ -624,6 +623,68 @@ function testTableParser() {
   assert(emptyHtml.includes('<td></td>'), 'empty cells rendered');
 }
 
+function testTableCaptionsAndRefs() {
+  console.log('\nTable captions and references');
+
+  const { parseMarkdown } = loadParser();
+
+  // Table with caption
+  let html = parseMarkdown('|: Results summary\n| H |\n| --- |\n| D |');
+  assert(html.includes('<caption>'), 'captioned table has <caption>');
+  assert(html.includes('Table 1:'), 'table caption has auto-number');
+  assert(html.includes('Results summary'), 'table caption has text');
+  assert(html.includes('<th>H</th>'), 'captioned table still has header');
+  assert(html.includes('<td>D</td>'), 'captioned table still has data');
+
+  // Table without caption — no numbering
+  html = parseMarkdown('| H |\n| --- |\n| D |');
+  assert(!html.includes('<caption>'), 'table without caption has no <caption>');
+  assert(!html.includes('Table 1'), 'table without caption is not numbered');
+
+  // Table with caption and label
+  html = parseMarkdown('|: Results {label:results}\n| H |\n| --- |\n| D |');
+  assert(html.includes('id="tbl-results"'), 'labeled table has id');
+  assert(html.includes('Table 1:'), 'labeled table is numbered');
+  assert(html.includes('Results'), 'labeled table has caption text');
+
+  // Caption-only (no text, just label) → shows Table N without colon
+  html = parseMarkdown('|: {label:data}\n| H |\n| --- |\n| D |');
+  assert(html.includes('id="tbl-data"'), 'label-only table has id');
+  assert(html.includes('<strong>Table 1</strong>'), 'label-only table shows Table N');
+
+  // Multiple tables numbered sequentially
+  html = parseMarkdown('|: First\n| A |\n| --- |\n| 1 |\n\n|: Second\n| B |\n| --- |\n| 2 |');
+  assert(html.includes('Table 1:') && html.includes('Table 2:'), 'multiple tables numbered sequentially');
+
+  // Table reference resolves
+  html = parseMarkdown('|: Data {label:mydata}\n| H |\n| --- |\n| D |\n\nSee {tbl:mydata}.');
+  assert(html.includes('>Table 1<'), 'table reference resolves to Table 1');
+  assert(html.includes('href="#tbl-mydata"'), 'table reference links to table id');
+  assert(html.includes('class="table-ref"'), 'table reference has table-ref class');
+
+  // Forward reference (reference before table)
+  html = parseMarkdown('See {tbl:later}.\n\n|: Results {label:later}\n| H |\n| --- |\n| D |');
+  assert(html.includes('>Table 1<'), 'forward table reference resolves');
+
+  // Unknown label shows ??
+  html = parseMarkdown('See {tbl:missing}.');
+  assert(html.includes('Table ??'), 'unknown table label shows Table ??');
+
+  // Table numbering independent of figure numbering
+  html = parseMarkdown('![Fig](a.jpg)\n\n|: Tab\n| H |\n| --- |\n| D |');
+  assert(html.includes('Figure 1:'), 'figure is numbered 1');
+  assert(html.includes('Table 1:'), 'table is numbered 1 independently');
+
+  // Counter resets between calls
+  html = parseMarkdown('|: Fresh\n| H |\n| --- |\n| D |');
+  assert(html.includes('Table 1:'), 'table counter resets between calls');
+
+  // Inline formatting in caption
+  html = parseMarkdown('|: Results with **bold** and $x^2$\n| H |\n| --- |\n| D |');
+  assert(html.includes('<strong>bold</strong>'), 'bold works in table caption');
+  assert(html.includes('math-inline'), 'math works in table caption');
+}
+
 function testTableExportCSS() {
   console.log('\nTable export CSS');
 
@@ -634,6 +695,7 @@ function testTableExportCSS() {
   assert(html.includes('table-wrapper'), 'export CSS has table-wrapper rule');
   assert(html.includes('border-collapse'), 'export CSS has border-collapse');
   assert(html.includes('<table>'), 'exported body contains table');
+  assert(html.includes('a.table-ref'), 'export CSS has table-ref rule');
 }
 
 function testTablePreviewCSS() {
@@ -646,6 +708,8 @@ function testTablePreviewCSS() {
   assert(css.includes('.preview-content td'), 'style.css has td rule');
   assert(css.includes('.table-grid-picker'), 'style.css has grid picker rule');
   assert(css.includes('.table-context-menu'), 'style.css has context menu rule');
+  assert(css.includes('.preview-content a.table-ref'), 'style.css has table-ref rule');
+  assert(css.includes('.preview-content caption'), 'style.css has caption rule');
 }
 
 // --- Main ---
@@ -671,6 +735,7 @@ function testTablePreviewCSS() {
     testFigureLabelsAndRefs();
     testLatexInCaptions();
     testTableParser();
+    testTableCaptionsAndRefs();
     testTableExportCSS();
     testTablePreviewCSS();
   } catch (err) {

@@ -66,6 +66,18 @@ Insert a table with the **Table** button — a grid picker lets you choose the s
 
 Right-click a table in the editor to add or remove rows and columns via the context menu. Alignment is set with colons in the separator row: `:---` left, `:---:` center, `---:` right. Inline formatting like **bold**, *italic*, `code`, and [links](https://example.com) works inside cells.
 
+### Table captions and references
+
+Add a caption line starting with `|:` immediately before the header row:
+
+|: Experimental results {label:results}
+| Method | Accuracy |
+| --- | ---: |
+| Baseline | 72% |
+| Ours | 89% |
+
+Tables with captions are auto-numbered independently of figures. Add `{label:name}` in the caption to make the table referenceable. Use `{tbl:name}` anywhere in the text to create a clickable link — for example, {tbl:results} links to the table above. Forward references work the same as with figures.
+
 ## Math
 
 Inline math uses single dollar signs: `$E = mc^2$` renders as $E = mc^2$. Display math uses double dollar signs on their own lines:

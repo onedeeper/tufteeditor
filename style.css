@@ -569,7 +569,8 @@ body {
 }
 
 /* Override Tufte CSS link styling (background-image underline) so only our border shows */
-.preview-content a.figure-ref {
+.preview-content a.figure-ref,
+.preview-content a.table-ref {
   text-decoration: none;
   background: none;
   text-shadow: none;
@@ -577,8 +578,17 @@ body {
   border-bottom: 1px solid #999;
 }
 
-.preview-content a.figure-ref:hover {
+.preview-content a.figure-ref:hover,
+.preview-content a.table-ref:hover {
   border-bottom-color: #333;
+}
+
+/* Table captions */
+.preview-content caption {
+  caption-side: top;
+  text-align: left;
+  padding: 0.4em 0;
+  font-size: 0.875rem;
 }
 
 /* Let margin notes float freely across section boundaries to avoid gaps */
