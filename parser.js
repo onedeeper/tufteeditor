@@ -8,10 +8,28 @@
 
 let _sidenoteCounter = 0;
 let _marginnoteCounter = 0;
+let _figureCounter = 0;
+let _figureLabelMap = {};
 
 function resetCounters() {
   _sidenoteCounter = 0;
   _marginnoteCounter = 0;
+  _figureCounter = 0;
+  _figureLabelMap = {};
+}
+
+function parseModifiers(str) {
+  const result = { type: null, label: null };
+  if (!str) return result;
+  const parts = str.split(',').map(s => s.trim());
+  for (const part of parts) {
+    if (part === 'margin' || part === 'fullwidth') {
+      result.type = part;
+    } else if (part.startsWith('label:')) {
+      result.label = part.substring(6).trim();
+    }
+  }
+  return result;
 }
 
 /* ── Inline Pass ── */
@@ -24,16 +42,19 @@ function marginToggleHTML(id, labelContent, spanClass, spanContent) {
 
 function parseInline(text) {
   const placeholders = [];
+  const placeholderTexts = []; // plain text versions for alt attributes
 
   // Extract inline code → placeholders (before other processing to prevent bold/italic inside code)
   text = text.replace(/`([^`]+)`/g, (_, code) => {
     placeholders.push('<code>' + escapeHtml(code) + '</code>');
+    placeholderTexts.push(code);
     return '\x00PH' + (placeholders.length - 1) + '\x00';
   });
 
   // Extract inline math $...$ → placeholders (before other processing to prevent bold/italic inside math)
   text = text.replace(/\$([^\$\n]+?)\$/g, (_, math) => {
     placeholders.push('<span class="math-inline">' + escapeHtml(math) + '</span>');
+    placeholderTexts.push(math);
     return '\x00PH' + (placeholders.length - 1) + '\x00';
   });
 
@@ -52,6 +73,11 @@ function parseInline(text) {
     return `<span class="newthought">${content}</span>`;
   });
 
+  // Figure references: {fig:label} → resolved after full document parse
+  text = text.replace(/\{fig:([^}]+)\}/g, (_, label) => {
+    return `<a href="#fig-${escapeAttr(label.trim())}" class="figure-ref">\x00FIGREF:${label.trim()}\x00</a>`;
+  });
+
   // Citations: @url[url] and @key — single pass for stable left-to-right numbering
   text = text.replace(/@url\[([^\]]*)\]\[([^\]]+)\]|@url\[([^\]]+)\]|(?<!\w)@([a-zA-Z][\w:-]*)/g, (match, urlName, urlUrl, urlOnly, keyMatch) => {
     if (urlUrl !== undefined) return Citations.formatInlineUrlCitation(urlUrl, urlName || '');
@@ -59,21 +85,37 @@ function parseInline(text) {
     return Citations.formatInlineCitation(keyMatch);
   });
 
-  // Images: ![caption](url), ![caption][size%](url), with optional {margin} or {fullwidth}
-  text = text.replace(/!\[([^\]]*)\](?:\[([^\]]*)\])?\(([^)]+)\)(?:\{(margin|fullwidth)\})?/g, (_, caption, size, url, modifier) => {
+  // Images: ![caption](url), ![caption][size%](url), with optional {modifier,label:name}
+  text = text.replace(/!\[([^\]]*)\](?:\[([^\]]*)\])?\(([^)]+)\)(?:\{([^}]+)\})?/g, (_, caption, size, url, modifierStr) => {
+    const mods = parseModifiers(modifierStr);
     const sizeVal = size ? parseInt(size, 10) : NaN;
     const sizeStyle = (!isNaN(sizeVal) && sizeVal > 0) ? ` style="width:${sizeVal}%"` : '';
-    const imgTag = `<img src="${escapeAttr(url)}" alt="${escapeAttr(caption)}"${sizeStyle}/>`;
 
-    if (modifier === 'margin') {
+    // Build plain text alt by resolving placeholders to their text content
+    const altText = caption.replace(/\x00PH(\d+)\x00/g, (_, i) => placeholderTexts[parseInt(i)]);
+    const imgTag = `<img src="${escapeAttr(url)}" alt="${escapeAttr(altText)}"${sizeStyle}/>`;
+
+    if (mods.type === 'margin') {
       return marginToggleHTML('mn-fig-' + (++_marginnoteCounter), '&#8853;', 'marginnote', imgTag + (caption ? '<br>' + caption : ''));
     }
 
-    if (modifier === 'fullwidth') {
-      return `<figure class="fullwidth">${imgTag}${caption ? `<figcaption>${caption}</figcaption>` : ''}</figure>`;
+    // Auto-number non-margin figures that have a caption or label
+    const shouldNumber = caption || mods.label;
+    if (shouldNumber) {
+      _figureCounter++;
+      const figNum = _figureCounter;
+      const figId = mods.label ? `fig-${mods.label}` : `fig-${figNum}`;
+      if (mods.label) _figureLabelMap[mods.label] = figNum;
+
+      const figCaption = caption
+        ? `<figcaption><strong>Figure ${figNum}:</strong> ${caption}</figcaption>`
+        : `<figcaption><strong>Figure ${figNum}</strong></figcaption>`;
+      const figClass = mods.type === 'fullwidth' ? ' class="fullwidth"' : '';
+      return `<figure id="${figId}"${figClass}>${imgTag}${figCaption}</figure>`;
     }
 
-    return `<figure>${imgTag}${caption ? `<figcaption>${caption}</figcaption>` : ''}</figure>`;
+    const figClass = mods.type === 'fullwidth' ? ' class="fullwidth"' : '';
+    return `<figure${figClass}>${imgTag}</figure>`;
   });
 
   // Links: [text](url)
@@ -317,6 +359,12 @@ function parseMarkdown(src) {
 
   html += Citations.renderReferencesSection();
 
+  // Resolve figure references: replace placeholders with actual figure numbers
+  html = html.replace(/\x00FIGREF:([^\x00]+)\x00/g, (_, label) => {
+    const num = _figureLabelMap[label.trim()];
+    return num !== undefined ? `Figure ${num}` : `Figure ??`;
+  });
+
   return html;
 }
 
@@ -332,7 +380,7 @@ function generateFullHTML(bodyHTML, title) {
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tufte-css/1.8.0/tufte.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
-<style>body { padding: 2rem 0; } section { display: flow-root; } pre { width: 55%; overflow-x: auto; } figure { text-align: center; } figcaption { margin-top: 0.4em; font-size: 0.875rem; } article img { cursor: zoom-in; } .lightbox-overlay { position:fixed; inset:0; background:rgba(0,0,0,.9); display:flex; align-items:center; justify-content:center; z-index:500; cursor:zoom-out; } .lightbox-img { max-width:90vw; max-height:90vh; object-fit:contain; user-select:none; -webkit-user-select:none; } .table-wrapper { width:55%; margin:1.5em 0; overflow-x:auto; } table { border-collapse:collapse; width:100%; } th { text-align:left; padding:0.5em 0.75em; border-bottom:2px solid #333; font-weight:600; } td { padding:0.4em 0.75em; border-bottom:1px solid #ddd; } @media print { .table-wrapper { width:100%; } }${Citations.getCitationCSS()}</style>
+<style>body { padding: 2rem 0; } section { display: flow-root; } pre { width: 55%; overflow-x: auto; } figure { display: table; text-align: center; } figcaption { display: table-caption; caption-side: bottom; float: none; margin-top: 0.4em; font-size: 0.875rem; text-align: center; } a.figure-ref { text-decoration: none; background: none; text-shadow: none; color: inherit; border-bottom: 1px solid #999; } a.figure-ref:hover { border-bottom-color: #333; } article img { cursor: zoom-in; } .lightbox-overlay { position:fixed; inset:0; background:rgba(0,0,0,.9); display:flex; align-items:center; justify-content:center; z-index:500; cursor:zoom-out; } .lightbox-img { max-width:90vw; max-height:90vh; object-fit:contain; user-select:none; -webkit-user-select:none; } .table-wrapper { width:55%; margin:1.5em 0; overflow-x:auto; } table { border-collapse:collapse; width:100%; } th { text-align:left; padding:0.5em 0.75em; border-bottom:2px solid #333; font-weight:600; } td { padding:0.4em 0.75em; border-bottom:1px solid #ddd; } @media print { .table-wrapper { width:100%; } }${Citations.getCitationCSS()}</style>
 </head>
 <body>
 <article>

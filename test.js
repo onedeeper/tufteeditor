@@ -386,37 +386,37 @@ function testFigures() {
 
   const { parseMarkdown } = loadParser();
 
-  // Basic image with caption → <figure> wrapping <img> + <figcaption>
+  // Basic image with caption → auto-numbered <figure> with <figcaption>
   let html = parseMarkdown('![My caption](photo.jpg)');
-  assert(html.includes('<figure>'), 'image with caption wrapped in <figure>');
-  assert(html.includes('<figcaption>My caption</figcaption>'), 'figcaption contains caption text');
+  assert(html.includes('<figure id="fig-1"'), 'image with caption wrapped in <figure> with id');
+  assert(html.includes('<strong>Figure 1:</strong> My caption'), 'figcaption has auto-numbered prefix');
   assert(html.includes('src="photo.jpg"'), 'img src is set');
   assert(html.includes('alt="My caption"'), 'img alt matches caption');
 
-  // Image without caption → no <figcaption>
+  // Image without caption → no figcaption, no numbering
   html = parseMarkdown('![](photo.jpg)');
-  assert(html.includes('<figure>'), 'captionless image still wrapped in <figure>');
+  assert(html.includes('<figure>') || html.includes('<figure '), 'captionless image still wrapped in <figure>');
   assert(!html.includes('<figcaption>'), 'no figcaption when caption is empty');
 
   // Image with size bracket
   html = parseMarkdown('![Sized](photo.jpg)');
-  assert(html.includes('<figure>'), 'sized image wrapped in <figure>');
-  assert(html.includes('<figcaption>Sized</figcaption>'), 'sized image has figcaption');
+  assert(html.includes('<figure id="fig-1"'), 'sized image wrapped in numbered <figure>');
+  assert(html.includes('Figure 1:</strong> Sized'), 'sized image has numbered figcaption');
 
   html = parseMarkdown('![Sized][75](photo.jpg)');
   assert(html.includes('style="width:75%"'), 'size bracket sets width style');
 
   // Fullwidth image
   html = parseMarkdown('![Full caption](photo.jpg){fullwidth}');
-  assert(html.includes('<figure class="fullwidth">'), 'fullwidth modifier adds class');
-  assert(html.includes('<figcaption>Full caption</figcaption>'), 'fullwidth figure has figcaption');
+  assert(html.includes('class="fullwidth"'), 'fullwidth modifier adds class');
+  assert(html.includes('Figure 1:</strong> Full caption'), 'fullwidth figure has numbered figcaption');
 
   // Fullwidth without caption
   html = parseMarkdown('![](photo.jpg){fullwidth}');
-  assert(html.includes('<figure class="fullwidth">'), 'fullwidth without caption has figure');
+  assert(html.includes('class="fullwidth"'), 'fullwidth without caption has figure class');
   assert(!html.includes('<figcaption>'), 'fullwidth without caption has no figcaption');
 
-  // Margin figure → should NOT produce <figure>, uses margin toggle instead
+  // Margin figure → should NOT produce <figure>, uses margin toggle instead, NOT numbered
   html = parseMarkdown('![Margin cap](photo.jpg){margin}');
   assert(html.includes('marginnote'), 'margin figure uses marginnote span');
   assert(!html.includes('<figure'), 'margin figure does not use <figure>');
@@ -427,16 +427,25 @@ function testFigures() {
   assert(html.includes('marginnote'), 'captionless margin figure uses marginnote');
   assert(!html.includes('<br>'), 'captionless margin figure has no <br>');
 
-  // Multiple figures in sequence
+  // Multiple figures in sequence — auto-numbered
   html = parseMarkdown('![First](a.jpg)\n\n![Second](b.jpg)\n\n![Third](c.jpg)');
-  assert(html.includes('<figcaption>First</figcaption>'), 'first of multiple figures has caption');
-  assert(html.includes('<figcaption>Second</figcaption>'), 'second of multiple figures has caption');
-  assert(html.includes('<figcaption>Third</figcaption>'), 'third of multiple figures has caption');
+  assert(html.includes('Figure 1:</strong> First'), 'first figure is numbered 1');
+  assert(html.includes('Figure 2:</strong> Second'), 'second figure is numbered 2');
+  assert(html.includes('Figure 3:</strong> Third'), 'third figure is numbered 3');
+  assert(html.includes('id="fig-1"'), 'first figure has id fig-1');
+  assert(html.includes('id="fig-2"'), 'second figure has id fig-2');
+  assert(html.includes('id="fig-3"'), 'third figure has id fig-3');
 
   // Special characters in caption are preserved (not double-escaped)
   html = parseMarkdown('![A & B](photo.jpg)');
-  assert(html.includes('<figcaption>A &amp; B</figcaption>') || html.includes('<figcaption>A & B</figcaption>'),
+  assert(html.includes('A &amp; B') || html.includes('A & B'),
     'special chars in caption handled');
+
+  // Margin figures don't affect numbering of regular figures
+  html = parseMarkdown('![First](a.jpg)\n\n![Side](b.jpg){margin}\n\n![Second](c.jpg)');
+  assert(html.includes('Figure 1:</strong> First'), 'figure before margin is numbered 1');
+  assert(html.includes('Figure 2:</strong> Second'), 'figure after margin is numbered 2');
+  assert(!html.includes('Figure 3'), 'margin figure does not consume a number');
 }
 
 function testExportFigureCSS() {
@@ -448,18 +457,19 @@ function testExportFigureCSS() {
   const html = generateFullHTML(body, 'Test Doc');
 
   // The inline <style> must contain figure centering rules
-  assert(html.includes('figure { text-align: center; }'), 'export CSS has figure text-align center');
-  assert(html.includes('figcaption { margin-top: 0.4em;'), 'export CSS has figcaption margin-top');
+  assert(html.includes('figure {') && html.includes('text-align: center'), 'export CSS has figure text-align center');
+  assert(html.includes('margin-top: 0.4em;') && html.includes('figcaption {'), 'export CSS has figcaption margin-top');
   assert(html.includes('font-size: 0.875rem;'), 'export CSS has figcaption font-size');
+  assert(html.includes('a.figure-ref'), 'export CSS has figure-ref rule');
 
   // Basic structure checks
   assert(html.includes('<!DOCTYPE html>'), 'export is full HTML document');
   assert(html.includes('<title>Test Doc</title>'), 'export has correct title');
   assert(html.includes('tufte'), 'export links Tufte CSS');
 
-  // The body contains our figure
-  assert(html.includes('<figure>'), 'export body contains <figure>');
-  assert(html.includes('<figcaption>Test</figcaption>'), 'export body contains figcaption');
+  // The body contains our auto-numbered figure
+  assert(html.includes('<figure id="fig-1"'), 'export body contains numbered <figure>');
+  assert(html.includes('Figure 1:</strong> Test'), 'export body contains numbered figcaption');
 }
 
 function testPreviewCSS() {
@@ -474,43 +484,98 @@ function testPreviewCSS() {
     'figcaption rule has margin-top 0.4em');
   assert(/\.preview-content figcaption[\s\S]*?font-size:\s*0\.875rem/.test(css),
     'figcaption rule has font-size 0.875rem');
+  assert(css.includes('.preview-content a.figure-ref'), 'style.css has figure-ref rule');
 }
 
 function testAutoNumbering() {
-  console.log('\nFigure auto-numbering logic');
+  console.log('\nFigure auto-numbering in parser');
 
-  // The toolbar uses: (editor.value.match(/!\[/g) || []).length
-  // Test the same regex pattern against various inputs
-  const countImages = (text) => (text.match(/!\[/g) || []).length;
+  const { parseMarkdown } = loadParser();
 
-  // Empty editor → 0 images, next figure = "Figure 1"
-  assert(countImages('') === 0, 'empty text has 0 images');
+  // Single figure is numbered 1
+  let html = parseMarkdown('![Caption](img.jpg)');
+  assert(html.includes('Figure 1:'), 'single figure numbered 1');
 
-  // One image
-  assert(countImages('![caption](url)') === 1, 'one image counts as 1');
+  // Multiple figures numbered sequentially
+  html = parseMarkdown('![A](a.jpg)\n\n![B](b.jpg)\n\n![C](c.jpg)');
+  assert(html.includes('Figure 1:') && html.includes('Figure 2:') && html.includes('Figure 3:'),
+    'multiple figures numbered sequentially');
 
-  // Multiple images
-  assert(countImages('![a](x)\n\n![b](y)\n\n![c](z)') === 3, 'three images count as 3');
+  // Margin figures do not get numbered
+  html = parseMarkdown('![A](a.jpg)\n\n![M](m.jpg){margin}\n\n![B](b.jpg)');
+  assert(html.includes('Figure 1:') && html.includes('Figure 2:'),
+    'margin figures skipped in numbering');
+  assert(!html.includes('Figure 3'), 'no Figure 3 when margin skipped');
 
-  // Images with modifiers still counted
-  assert(countImages('![a](x){fullwidth}\n\n![b](y){margin}') === 2, 'modified images counted');
+  // Captionless images are not numbered
+  html = parseMarkdown('![](a.jpg)\n\n![B](b.jpg)');
+  assert(html.includes('Figure 1:') && html.includes('B'), 'captionless image not numbered, next is Figure 1');
+  assert(!html.includes('Figure 2'), 'no Figure 2 since captionless was skipped');
 
-  // Image with size bracket
-  assert(countImages('![a][50](x)') === 1, 'sized image counted');
+  // Each parseMarkdown call resets the counter
+  html = parseMarkdown('![Fresh](img.jpg)');
+  assert(html.includes('Figure 1:'), 'counter resets between parseMarkdown calls');
+}
 
-  // No false positives from regular links [text](url) without !
-  assert(countImages('[not an image](url)') === 0, 'links are not counted as images');
+function testFigureLabelsAndRefs() {
+  console.log('\nFigure labels and references');
 
-  // Exclamation in normal text doesn't trigger (needs ![)
-  assert(countImages('Hello! World') === 0, 'bare ! not counted');
+  const { parseMarkdown } = loadParser();
 
-  // Mixed content: images + links + text
-  assert(countImages('Some text ![a](x) and [link](y) then ![b](z)') === 2,
-    'mixed content counts only images');
+  // Label syntax creates a figure with a named id
+  let html = parseMarkdown('![My plot](plot.png){label:myplot}');
+  assert(html.includes('id="fig-myplot"'), 'labeled figure has named id');
+  assert(html.includes('Figure 1:'), 'labeled figure is still numbered');
 
-  // Image syntax inside code block (known trade-off: counted, but acceptable for placeholder default)
-  assert(countImages('```\n![code](x)\n```\n![real](y)') === 2,
-    'images in code blocks are counted (known trade-off)');
+  // Figure reference resolves to correct number
+  html = parseMarkdown('![Plot](plot.png){label:myplot}\n\nSee {fig:myplot} for details.');
+  assert(html.includes('Figure 1'), 'figure reference shows Figure 1');
+  assert(html.includes('href="#fig-myplot"'), 'figure reference links to figure id');
+  assert(html.includes('class="figure-ref"'), 'figure reference has figure-ref class');
+
+  // Forward reference (reference before figure)
+  html = parseMarkdown('See {fig:myplot} below.\n\n![Plot](plot.png){label:myplot}');
+  assert(html.includes('>Figure 1<'), 'forward reference resolves correctly');
+
+  // Unknown label shows ??
+  html = parseMarkdown('See {fig:missing}.');
+  assert(html.includes('Figure ??'), 'unknown label shows Figure ??');
+
+  // Multiple labeled figures
+  html = parseMarkdown('![A](a.jpg){label:first}\n\n![B](b.jpg){label:second}\n\nSee {fig:first} and {fig:second}.');
+  assert(html.includes('>Figure 1<'), 'first label resolves to 1');
+  assert(html.includes('>Figure 2<'), 'second label resolves to 2');
+
+  // Combined modifier and label
+  html = parseMarkdown('![Wide](w.jpg){fullwidth,label:wide}');
+  assert(html.includes('class="fullwidth"'), 'combined modifier keeps fullwidth class');
+  assert(html.includes('id="fig-wide"'), 'combined modifier keeps label id');
+  assert(html.includes('Figure 1:'), 'combined modifier figure is numbered');
+
+  // Label-only (no caption) still gets numbered
+  html = parseMarkdown('![](img.jpg){label:nocap}');
+  assert(html.includes('id="fig-nocap"'), 'label-only figure has id');
+  assert(html.includes('<strong>Figure 1</strong>'), 'label-only figure shows Figure N without colon');
+}
+
+function testLatexInCaptions() {
+  console.log('\nLaTeX in figure captions');
+
+  const { parseMarkdown } = loadParser();
+
+  // LaTeX in caption renders as math-inline span in figcaption
+  let html = parseMarkdown('![Values of $x_1$ over time](plot.png)');
+  assert(html.includes('math-inline'), 'LaTeX in caption produces math-inline span');
+  assert(html.includes('<figcaption>'), 'caption with LaTeX has figcaption');
+
+  // Alt attribute uses plain text (no HTML tags)
+  assert(html.includes('alt="Values of x_1 over time"'), 'alt uses plain text for LaTeX');
+  assert(!html.includes('alt="Values of <span'), 'alt does not contain HTML tags');
+
+  // Code in caption also works
+  html = parseMarkdown('![The `foo` function](code.png)');
+  assert(html.includes('<code>foo</code>'), 'code in caption renders');
+  assert(html.includes('alt="The foo function"'), 'alt uses plain text for code');
 }
 
 function testTableParser() {
@@ -603,6 +668,8 @@ function testTablePreviewCSS() {
     testExportFigureCSS();
     testPreviewCSS();
     testAutoNumbering();
+    testFigureLabelsAndRefs();
+    testLatexInCaptions();
     testTableParser();
     testTableExportCSS();
     testTablePreviewCSS();

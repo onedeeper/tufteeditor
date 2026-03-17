@@ -552,13 +552,33 @@ body {
     0 0.03em #fffff8, 0 -0.03em #fffff8;
 }
 
+/* Override Tufte CSS figure layout so image + caption stay together */
 .preview-content figure {
+  display: table;
   text-align: center;
 }
 
+/* Caption spans the same width as the image above it */
 .preview-content figcaption {
+  display: table-caption;
+  caption-side: bottom;
+  float: none;
   margin-top: 0.4em;
   font-size: 0.875rem;
+  text-align: center;
+}
+
+/* Override Tufte CSS link styling (background-image underline) so only our border shows */
+.preview-content a.figure-ref {
+  text-decoration: none;
+  background: none;
+  text-shadow: none;
+  color: inherit;
+  border-bottom: 1px solid #999;
+}
+
+.preview-content a.figure-ref:hover {
+  border-bottom-color: #333;
 }
 
 /* Let margin notes float freely across section boundaries to avoid gaps */

@@ -359,8 +359,7 @@
     const snip = snippets[key];
     if (!snip) return;
     if (key === 'image' || key === 'fullwidth' || key === 'marginfig') {
-      const count = (editor.value.match(/!\[/g) || []).length;
-      insertSnippet({ ...snip, placeholder: 'Figure ' + (count + 1) });
+      insertSnippet(snip);
       return;
     }
     insertSnippet(snip);
