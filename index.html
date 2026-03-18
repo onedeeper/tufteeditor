@@ -35,6 +35,26 @@
           <button class="cite-style-btn toggle-btn active" data-cite-style="numbered" title="Numbered citations">[1]</button>
           <button class="cite-style-btn toggle-btn" data-cite-style="apa" title="APA citations">APA</button>
         </div>
+        <div class="appearance-controls">
+          <label class="color-picker-label" title="Background color">
+            <span class="color-label-text">Bg</span>
+            <input type="color" id="bg-color-input" class="color-input" value="#fffff8">
+          </label>
+          <label class="color-picker-label" title="Font color">
+            <span class="color-label-text">A</span>
+            <input type="color" id="font-color-input" class="color-input" value="#111111">
+          </label>
+          <select id="font-select" class="font-select" title="Preview font">
+            <option value="et-book">ET Book</option>
+            <option value="palatino">Palatino</option>
+            <option value="georgia">Georgia</option>
+            <option value="times">Times New Roman</option>
+            <option value="garamond">Garamond</option>
+            <option value="system-sans">Sans-serif</option>
+          </select>
+          <button id="font-upload-btn" class="topbar-small-btn" title="Upload custom font">+ Font</button>
+          <input type="file" id="font-file-input" accept=".woff,.woff2,.ttf,.otf" style="display:none">
+        </div>
         <div class="export-dropdown">
           <button class="export-btn">Export &#9662;</button>
           <div class="export-menu">

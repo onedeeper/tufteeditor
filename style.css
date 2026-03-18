@@ -24,6 +24,9 @@ button, input, select, textarea {
   --radius: 4px;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --preview-bg: #fffff8;
+  --preview-color: #111111;
+  --preview-font: et-book, Palatino, "Palatino Linotype", "Palatino LT STD", "Book Antiqua", Georgia, serif;
 }
 
 html {
@@ -186,6 +189,83 @@ body {
 }
 
 .export-menu button:hover {
+  background: var(--bg-dark);
+}
+
+/* ── Appearance Controls ── */
+.appearance-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.color-picker-label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.color-label-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  user-select: none;
+}
+
+.color-input {
+  width: 24px;
+  height: 24px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  background: #fff;
+}
+
+.color-input::-webkit-color-swatch-wrapper {
+  padding: 1px;
+}
+
+.color-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 2px;
+}
+
+.color-input::-moz-color-swatch {
+  border: none;
+  border-radius: 2px;
+}
+
+.font-select {
+  border: 1px solid var(--border);
+  background: #fff;
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--accent);
+  font-family: var(--font);
+  max-width: 150px;
+}
+
+.font-select:hover {
+  background: var(--bg-dark);
+}
+
+.topbar-small-btn {
+  border: 1px solid var(--border);
+  background: #fff;
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--accent);
+  font-family: var(--font);
+  white-space: nowrap;
+}
+
+.topbar-small-btn:hover {
   background: var(--bg-dark);
 }
 
@@ -511,7 +591,7 @@ body {
 
 .preview-pane {
   flex: 1 1 50%;
-  background: #fffff8; /* Tufte background */
+  background: var(--preview-bg);
 }
 
 #editor {
@@ -538,9 +618,9 @@ body {
   /* Replicate Tufte body-level layout for the preview area */
   padding-left: 12.5%;
   max-width: 1400px;
-  font-family: et-book, Palatino, "Palatino Linotype", "Palatino LT STD", "Book Antiqua", Georgia, serif;
-  background-color: #fffff8;
-  color: #111;
+  font-family: var(--preview-font);
+  background-color: var(--preview-bg);
+  color: var(--preview-color);
   counter-reset: sidenote-counter;
 }
 
@@ -548,8 +628,8 @@ body {
    but the preview uses #fffff8, so the white shadow halos become visible. */
 .preview-content a {
   text-shadow:
-    0.03em 0 #fffff8, -0.03em 0 #fffff8,
-    0 0.03em #fffff8, 0 -0.03em #fffff8;
+    0.03em 0 var(--preview-bg), -0.03em 0 var(--preview-bg),
+    0 0.03em var(--preview-bg), 0 -0.03em var(--preview-bg);
 }
 
 /* Override Tufte CSS figure layout so image + caption stay together */

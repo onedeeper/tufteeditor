@@ -18,6 +18,7 @@
  * 14. Table Grid Picker & Context Menu
  * 15. Sidebar (Document List)
  * 16. Citation Style Toggle
+ * 17. Appearance (Background Color & Font)
  */
 
 (async function () {
@@ -461,7 +462,7 @@
       temp.innerHTML = bodyHTML;
       renderMathAndCode(temp);
       bodyHTML = temp.innerHTML;
-      const fullHTML = generateFullHTML(bodyHTML, title);
+      const fullHTML = generateFullHTML(bodyHTML, title, getAppearanceCSS());
       const blob = new Blob([fullHTML], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1620,4 +1621,163 @@
     syncStyleToggle();
     updatePreview();
   });
+
+  /* ── 17. Appearance (Background Color & Font) ── */
+
+  const APPEARANCE_DEFAULTS = { bg: '#fffff8', color: '#111111', font: 'et-book' };
+
+  const BUILTIN_FONTS = {
+    'et-book':      'et-book, Palatino, "Palatino Linotype", "Palatino LT STD", "Book Antiqua", Georgia, serif',
+    'palatino':     'Palatino, "Palatino Linotype", "Palatino LT STD", "Book Antiqua", Georgia, serif',
+    'georgia':      'Georgia, "Times New Roman", serif',
+    'times':        '"Times New Roman", Times, serif',
+    'garamond':     'Garamond, "EB Garamond", Georgia, serif',
+    'system-sans':  '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  };
+
+  const uploadedFonts = new Map(); // filename -> family name
+
+  const bgColorInput   = document.getElementById('bg-color-input');
+  const fontColorInput = document.getElementById('font-color-input');
+  const fontSelect     = document.getElementById('font-select');
+  const fontUploadBtn  = document.getElementById('font-upload-btn');
+  const fontFileInput  = document.getElementById('font-file-input');
+
+  function setCSSVar(name, value) {
+    document.documentElement.style.setProperty(name, value);
+  }
+
+  /* Color pickers: live CSS update on input, persist on change */
+
+  bgColorInput.addEventListener('input', () => setCSSVar('--preview-bg', bgColorInput.value));
+  bgColorInput.addEventListener('change', () => localStorage.setItem('tufte-preview-bg', bgColorInput.value));
+
+  fontColorInput.addEventListener('input', () => setCSSVar('--preview-color', fontColorInput.value));
+  fontColorInput.addEventListener('change', () => localStorage.setItem('tufte-preview-color', fontColorInput.value));
+
+  /* Font helpers */
+
+  function fontNameFromFile(filename) {
+    return filename.replace(/\.(woff2?|ttf|otf)$/i, '').replace(/[-_]/g, ' ');
+  }
+
+  function fontFormatHint(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    return { woff2: 'woff2', woff: 'woff', ttf: 'truetype', otf: 'opentype' }[ext] || '';
+  }
+
+  function buildFontFaceCSS(filename) {
+    const familyName = fontNameFromFile(filename);
+    const format = fontFormatHint(filename);
+    const formatSrc = format ? ` format("${format}")` : '';
+    return `@font-face { font-family: "${familyName}"; src: url("/fonts/${encodeURIComponent(filename)}")${formatSrc}; }`;
+  }
+
+  function registerUploadedFont(filename) {
+    if (uploadedFonts.has(filename)) return;
+    const styleEl = document.createElement('style');
+    styleEl.textContent = buildFontFaceCSS(filename);
+    document.head.appendChild(styleEl);
+    uploadedFonts.set(filename, fontNameFromFile(filename));
+  }
+
+  function getFontStack(key) {
+    if (BUILTIN_FONTS[key]) return BUILTIN_FONTS[key];
+    const familyName = uploadedFonts.get(key);
+    if (familyName) return `"${familyName}", serif`;
+    return BUILTIN_FONTS['et-book'];
+  }
+
+  /**
+   * Builds extra CSS for HTML export reflecting current appearance.
+   * Reads from live UI state (input elements / select) rather than localStorage.
+   */
+  function getAppearanceCSS() {
+    const parts = [];
+    const bg = bgColorInput.value;
+    if (bg !== APPEARANCE_DEFAULTS.bg) {
+      parts.push(`body { background-color: ${bg}; }`);
+      parts.push(`a:link, a:visited { text-shadow: 0.03em 0 ${bg}, -0.03em 0 ${bg}, 0 0.03em ${bg}, 0 -0.03em ${bg}; }`);
+    }
+    const color = fontColorInput.value;
+    if (color !== APPEARANCE_DEFAULTS.color) {
+      parts.push(`body { color: ${color}; }`);
+    }
+    const fontKey = fontSelect.value;
+    if (fontKey !== APPEARANCE_DEFAULTS.font) {
+      parts.push(`body { font-family: ${getFontStack(fontKey)}; }`);
+    }
+    if (uploadedFonts.has(fontKey)) {
+      parts.push(buildFontFaceCSS(fontKey));
+    }
+    return parts.join(' ');
+  }
+
+  /* Font select */
+
+  function rebuildFontSelect(selectedKey) {
+    fontSelect.querySelectorAll('option[data-uploaded]').forEach(o => o.remove());
+    uploadedFonts.forEach((familyName, filename) => {
+      const opt = document.createElement('option');
+      opt.value = filename;
+      opt.textContent = familyName;
+      opt.dataset.uploaded = '1';
+      fontSelect.appendChild(opt);
+    });
+    if (selectedKey) fontSelect.value = selectedKey;
+  }
+
+  fontSelect.addEventListener('change', () => {
+    setCSSVar('--preview-font', getFontStack(fontSelect.value));
+    localStorage.setItem('tufte-preview-font', fontSelect.value);
+  });
+
+  /* Font Upload */
+
+  fontUploadBtn.addEventListener('click', () => fontFileInput.click());
+
+  fontFileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const res = await fetch('/api/fonts', {
+      method: 'POST',
+      headers: { 'X-Filename': file.name },
+      body: file,
+    });
+    if (!res.ok) return;
+    const { name } = await res.json();
+    registerUploadedFont(name);
+    rebuildFontSelect(name);
+    setCSSVar('--preview-font', getFontStack(name));
+    localStorage.setItem('tufte-preview-font', name);
+    fontFileInput.value = '';
+  });
+
+  /* Initialize Appearance — restore saved state without re-persisting */
+
+  async function initAppearance() {
+    try {
+      const res = await fetch('/api/fonts');
+      const fonts = await res.json();
+      fonts.forEach(registerUploadedFont);
+    } catch (e) { /* no fonts yet */ }
+
+    const savedBg = localStorage.getItem('tufte-preview-bg');
+    if (savedBg) bgColorInput.value = savedBg;
+    setCSSVar('--preview-bg', bgColorInput.value);
+
+    const savedColor = localStorage.getItem('tufte-preview-color');
+    if (savedColor) fontColorInput.value = savedColor;
+    setCSSVar('--preview-color', fontColorInput.value);
+
+    const savedFont = localStorage.getItem('tufte-preview-font');
+    if (savedFont && (BUILTIN_FONTS[savedFont] || uploadedFonts.has(savedFont))) {
+      rebuildFontSelect(savedFont);
+    } else {
+      rebuildFontSelect(APPEARANCE_DEFAULTS.font);
+    }
+    setCSSVar('--preview-font', getFontStack(fontSelect.value));
+  }
+
+  initAppearance();
 })();

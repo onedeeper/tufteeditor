@@ -29,7 +29,7 @@ Write a blockquote with an attribution line starting with `--` or `—`:
 
 Figures are auto-numbered. Write `![caption](url)` and the preview shows **Figure 1: caption**, **Figure 2: caption**, and so on. Margin figures (`{margin}`) are excluded from numbering. Images without captions are not numbered.
 
-![Mona Lisa, Leonardo da Vinci][50](https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/300px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg){margin}
+![Mona Lisa, Leonardo da Vinci][50](Mona Lisa by Leonardo da Vinci.webp){margin}
 
 Add a size bracket `[width%]` after the caption to control width — for example, `![caption][75](url)` renders at 75% width. A tooltip appears in the editor when your cursor is inside the size bracket.
 

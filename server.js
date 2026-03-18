@@ -11,11 +11,13 @@ const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
 const DOCS_DIR = path.join(ROOT, 'docs');
 const UPLOADS_DIR = path.join(ROOT, 'uploads');
+const FONTS_DIR = path.join(ROOT, 'fonts');
 const BIB_FILE = path.join(ROOT, 'library.bib');
 
 // Auto-create directories
 fs.mkdirSync(DOCS_DIR, { recursive: true });
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+fs.mkdirSync(FONTS_DIR, { recursive: true });
 
 const MIME = {
   '.html': 'text/html',
@@ -31,6 +33,8 @@ const MIME = {
   '.ico': 'image/x-icon',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
 };
 
 function sendJSON(res, status, data) {
@@ -169,36 +173,43 @@ function handleDocsAPI(req, res, urlPath) {
   sendJSON(res, 405, { error: 'Method not allowed' });
 }
 
-function handleUploadsAPI(req, res, urlPath) {
-  const route = urlPath.replace(/^\/api\/uploads\/?/, '');
+/**
+ * Factory for simple file-based CRUD APIs (uploads, fonts, etc.).
+ * Returns a handler supporting GET (list), POST (upload via raw body +
+ * X-Filename header), and DELETE by name.
+ */
+function makeFileHandler(dir, prefixRegex, listFilter) {
+  return function (req, res, urlPath) {
+    const route = urlPath.replace(prefixRegex, '');
 
-  // GET /api/uploads — list uploads
-  if (req.method === 'GET' && route === '') {
-    const files = fs.readdirSync(UPLOADS_DIR).filter(f => f !== '.gitkeep');
-    return sendJSON(res, 200, files);
-  }
+    if (req.method === 'GET' && route === '') {
+      const files = fs.readdirSync(dir).filter(listFilter);
+      return sendJSON(res, 200, files);
+    }
 
-  // POST /api/uploads — upload file (raw body, X-Filename header)
-  if (req.method === 'POST' && route === '') {
-    const filename = safeName(req.headers['x-filename'] || 'upload');
-    if (!filename) return sendJSON(res, 400, { error: 'Missing filename' });
-    return readBody(req).then(body => {
-      fs.writeFileSync(path.join(UPLOADS_DIR, filename), body);
-      sendJSON(res, 200, { ok: true, name: filename });
-    }).catch(err => sendJSON(res, 400, { error: err.message }));
-  }
+    if (req.method === 'POST' && route === '') {
+      const filename = safeName(req.headers['x-filename'] || 'upload');
+      if (!filename) return sendJSON(res, 400, { error: 'Missing filename' });
+      return readBody(req).then(body => {
+        fs.writeFileSync(path.join(dir, filename), body);
+        sendJSON(res, 200, { ok: true, name: filename });
+      }).catch(err => sendJSON(res, 400, { error: err.message }));
+    }
 
-  // DELETE /api/uploads/:name
-  if (req.method === 'DELETE' && route !== '') {
-    const name = safeName(route);
-    const filePath = path.join(UPLOADS_DIR, name);
-    if (!fs.existsSync(filePath)) return sendJSON(res, 404, { error: 'Not found' });
-    fs.unlinkSync(filePath);
-    return sendJSON(res, 200, { ok: true });
-  }
+    if (req.method === 'DELETE' && route !== '') {
+      const name = safeName(route);
+      const filePath = path.join(dir, name);
+      if (!fs.existsSync(filePath)) return sendJSON(res, 404, { error: 'Not found' });
+      fs.unlinkSync(filePath);
+      return sendJSON(res, 200, { ok: true });
+    }
 
-  sendJSON(res, 405, { error: 'Method not allowed' });
+    sendJSON(res, 405, { error: 'Method not allowed' });
+  };
 }
+
+const handleUploadsAPI = makeFileHandler(UPLOADS_DIR, /^\/api\/uploads\/?/, f => f !== '.gitkeep');
+const handleFontsAPI = makeFileHandler(FONTS_DIR, /^\/api\/fonts\/?/, f => /\.(woff2?|ttf|otf)$/i.test(f));
 
 function handleBibliographyAPI(req, res) {
   // GET /api/bibliography — read library.bib
@@ -269,19 +280,25 @@ function handleFoldersAPI(req, res, urlPath) {
 
 // --- Static file serving ---
 
-function serveStatic(req, res, urlPath) {
-  // Serve uploaded files from /uploads/
-  if (urlPath.startsWith('/uploads/')) {
-    const name = safeName(urlPath.slice('/uploads/'.length));
-    const filePath = path.join(UPLOADS_DIR, name);
-    if (!fs.existsSync(filePath)) {
-      res.writeHead(404);
-      return res.end('Not found');
-    }
-    const ext = path.extname(name).toLowerCase();
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
-    return fs.createReadStream(filePath).pipe(res);
+/** Serve a file from a directory if the URL matches the given prefix. Returns true if handled. */
+function serveDir(urlPath, prefix, dir, res) {
+  if (!urlPath.startsWith(prefix)) return false;
+  const name = safeName(urlPath.slice(prefix.length));
+  const filePath = path.join(dir, name);
+  if (!fs.existsSync(filePath)) {
+    res.writeHead(404);
+    res.end('Not found');
+    return true;
   }
+  const ext = path.extname(name).toLowerCase();
+  res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+  fs.createReadStream(filePath).pipe(res);
+  return true;
+}
+
+function serveStatic(req, res, urlPath) {
+  if (serveDir(urlPath, '/fonts/', FONTS_DIR, res)) return;
+  if (serveDir(urlPath, '/uploads/', UPLOADS_DIR, res)) return;
 
   // Default to index.html for root
   let filePath = path.join(ROOT, urlPath === '/' ? 'index.html' : urlPath);
@@ -314,6 +331,9 @@ const server = http.createServer((req, res) => {
   }
   if (urlPath.startsWith('/api/folders')) {
     return handleFoldersAPI(req, res, urlPath);
+  }
+  if (urlPath.startsWith('/api/fonts')) {
+    return handleFontsAPI(req, res, urlPath);
   }
   if (urlPath.startsWith('/api/uploads')) {
     return handleUploadsAPI(req, res, urlPath);
