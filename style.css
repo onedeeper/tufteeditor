@@ -638,11 +638,14 @@ body {
   text-align: center;
 }
 
-/* Caption spans the same width as the image above it */
+/* Caption spans the same width as the image above it;
+   resets Tufte CSS sidenote-style positioning (float/max-width/margin) */
 .preview-content figcaption {
   display: table-caption;
   caption-side: bottom;
   float: none;
+  max-width: 100%;
+  margin-right: 0;
   margin-top: 0.4em;
   font-size: 0.875rem;
   text-align: center;
