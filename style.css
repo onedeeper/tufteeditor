@@ -611,7 +611,8 @@ body {
   tab-size: 2;
   white-space: pre-wrap;
   word-wrap: break-word;
-  overflow: hidden;
+  overflow-y: scroll;
+  overflow-x: hidden;
   pointer-events: none;
   box-sizing: border-box;
 }
@@ -619,16 +620,7 @@ body {
 .editor-backdrop mark {
   color: transparent;
   border-radius: 3px;
-}
-
-.editor-backdrop mark.sn-highlight {
-  background: rgba(70, 130, 180, 0.12);
-  border-bottom: 1.5px solid rgba(70, 130, 180, 0.35);
-}
-
-.editor-backdrop mark.mn-highlight {
-  background: rgba(160, 120, 60, 0.12);
-  border-bottom: 1.5px solid rgba(160, 120, 60, 0.35);
+  background: rgba(255, 220, 80, 0.25);
 }
 
 #editor {

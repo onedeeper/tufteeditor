@@ -12,7 +12,7 @@ Create folders with the **+ Folder** button in the sidebar header. Drag and drop
 
 Sidenotes appear in the margin, numbered automatically.{sn:This is a sidenote. Write them with \`{sn:your text}\` right after the word they annotate.} They keep the reader's eye on the page instead of jumping to the bottom.
 
-Margin notes are similar but unnumbered.{mn:This is a margin note. Write them with \`{mn:your text}\`. Use these for supplementary remarks.} Good for commentary that doesn't need a reference number.
+Margin notes are similar but unnumbered.{mn:This is a margin note. Write them with \`{mn:your text}\`. You can also use math here $\frac{1}{2}$. Use these for supplementary remarks.} Good for commentary that doesn't need a reference number. They are highlighted in the editor as you add them.
 
 ## New Thoughts
 

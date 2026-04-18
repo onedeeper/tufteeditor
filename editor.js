@@ -39,16 +39,30 @@
 
   function updateHighlights() {
     const text = editor.value;
-    // Escape HTML, then wrap {sn:...} and {mn:...} in <mark> tags
-    const escaped = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-    const highlighted = escaped
-      .replace(/(\{sn:[^}]*\})/g, '<mark class="sn-highlight">$1</mark>')
-      .replace(/(\{mn:[^}]*\})/g, '<mark class="mn-highlight">$1</mark>');
+    // Walk the text tracking brace depth so nested {...} (e.g. LaTeX \frac{1}{2}
+    // inside a margin note) don't prematurely close the match.
+    const noteStart = /\{(?:sn|mn):/g;
+    let html = '';
+    let lastEnd = 0;
+    let m;
+    while ((m = noteStart.exec(text)) !== null) {
+      const start = m.index;
+      let depth = 1;
+      let j = start + m[0].length;
+      while (j < text.length && depth > 0) {
+        if (text[j] === '{') depth++;
+        else if (text[j] === '}') depth--;
+        j++;
+      }
+      if (depth !== 0) continue; // unclosed — leave unhighlighted
+      html += escapeHtml(text.substring(lastEnd, start));
+      html += '<mark>' + escapeHtml(text.substring(start, j)) + '</mark>';
+      lastEnd = j;
+      noteStart.lastIndex = j;
+    }
+    html += escapeHtml(text.substring(lastEnd));
     // Trailing newline ensures backdrop height matches textarea
-    backdrop.innerHTML = highlighted + '\n';
+    backdrop.innerHTML = html + '\n';
   }
 
   function syncBackdropScroll() {
