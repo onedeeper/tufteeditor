@@ -143,14 +143,13 @@ function parseInline(text) {
   return text;
 }
 
-function escapeAttr(s) {
-  if (!s) return '';
-  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
 function escapeHtml(s) {
   if (!s) return '';
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escapeAttr(s) {
+  return escapeHtml(s).replace(/"/g, '&quot;');
 }
 
 /* ── Table Helpers ── */

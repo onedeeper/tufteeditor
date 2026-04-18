@@ -26,6 +26,7 @@
   await Citations.init();
 
   const editor    = document.getElementById('editor');
+  const backdrop  = document.getElementById('editor-backdrop');
   const preview   = document.querySelector('#preview article');
   const wordCount = document.querySelector('.word-count');
   const docTitle  = document.querySelector('.doc-title');
@@ -33,6 +34,29 @@
 
   const SAVE_DELAY    = 1000;
   const PREVIEW_DELAY = 150;
+
+  /* ── Highlight side/margin notes in the editor ── */
+
+  function updateHighlights() {
+    const text = editor.value;
+    // Escape HTML, then wrap {sn:...} and {mn:...} in <mark> tags
+    const escaped = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    const highlighted = escaped
+      .replace(/(\{sn:[^}]*\})/g, '<mark class="sn-highlight">$1</mark>')
+      .replace(/(\{mn:[^}]*\})/g, '<mark class="mn-highlight">$1</mark>');
+    // Trailing newline ensures backdrop height matches textarea
+    backdrop.innerHTML = highlighted + '\n';
+  }
+
+  function syncBackdropScroll() {
+    backdrop.scrollTop = editor.scrollTop;
+    backdrop.scrollLeft = editor.scrollLeft;
+  }
+
+  editor.addEventListener('scroll', syncBackdropScroll);
 
   /* ── 1. Initialization ── */
 
@@ -42,6 +66,7 @@
   docTitle.textContent = initDoc.title;
   updatePreview();
   updateWordCount();
+  updateHighlights();
   editor.focus();
 
   /* ── 2. Live Preview & Auto-save ── */
@@ -61,6 +86,7 @@
     undoTimer = setTimeout(() => history.save(), 400);
     showAutocomplete();
     checkSizeTooltip();
+    updateHighlights();
   });
 
   editor.addEventListener('click', () => {
@@ -281,6 +307,7 @@
       editor.focus();
       updatePreview();
       updateWordCount();
+      updateHighlights();
       scheduleSave();
     }
   };
@@ -295,6 +322,7 @@
     history.reset();
     updatePreview();
     updateWordCount();
+    updateHighlights();
   }
 
   document.getElementById('undo-btn').addEventListener('click', () => history.undo());
@@ -779,21 +807,25 @@
     return { top, left };
   }
 
+  function activateAutocomplete(context, items) {
+    ac.context = context;
+    ac.items = items;
+    ac.index = 0;
+    ac.active = true;
+    renderAutocomplete();
+    positionAutocomplete();
+  }
+
   function showAutocomplete() {
     // LaTeX (inside math context)
     const latexCtx = getLatexQuery();
     if (latexCtx) {
       const latexResults = LatexCompletions.search(latexCtx.query);
       if (latexResults.length > 0) {
-        ac.context = latexCtx;
-        ac.items = latexResults.map(r => ({
+        activateAutocomplete(latexCtx, latexResults.map(r => ({
           type: 'latex', label: '\\' + r.name, detail: r.detail,
           template: r.template, cursorOffset: r.cursorOffset
-        }));
-        ac.index = 0;
-        ac.active = true;
-        renderAutocomplete();
-        positionAutocomplete();
+        })));
         return;
       }
     }
@@ -803,15 +835,10 @@
     if (urlCtx) {
       const urlResults = Citations.searchUrlStore(urlCtx.query);
       if (urlResults.length > 0) {
-        ac.context = urlCtx;
-        ac.items = urlResults.map(r => ({
+        activateAutocomplete(urlCtx, urlResults.map(r => ({
           type: 'urlcite', url: r.url, label: r.url,
           detail: r.name || undefined
-        }));
-        ac.index = 0;
-        ac.active = true;
-        renderAutocomplete();
-        positionAutocomplete();
+        })));
         return;
       }
       hideAutocomplete();
@@ -842,13 +869,7 @@
 
     if (results.length === 0) { hideAutocomplete(); return; }
 
-    ac.context = ctx;
-    ac.items = results.slice(0, 8);
-    ac.index = 0;
-    ac.active = true;
-
-    renderAutocomplete();
-    positionAutocomplete();
+    activateAutocomplete(ctx, results.slice(0, 8));
   }
 
   function renderAutocomplete() {
